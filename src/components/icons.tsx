@@ -143,6 +143,14 @@ export const SortIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const TrendIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 19h16" />
+    <path d="m5 15 4.5-5 3.5 3 6-7" />
+    <path d="M15 6h4v4" />
+  </Svg>
+);
+
 export const InfoIcon = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="8.5" />

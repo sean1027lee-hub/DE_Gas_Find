@@ -6,7 +6,7 @@ import { ServiceWorker } from "@/components/ServiceWorker";
 import { THEME_BOOT_SCRIPT } from "@/lib/store";
 
 const APP_NAME = "Tankpreis";
-const DESCRIPTION = "내 위치 주변에서 가장 싼 주유소를 3초 안에. 독일 MTS-K 실시간 가격 + Fleet Card 할인 반영.";
+const DESCRIPTION = "내 위치 주변에서 가장 싼 주유소를 3초 안에. 독일 MTS-K 실시간 가격, 3년 평균·유럽 이웃나라와 비교.";
 
 export const metadata: Metadata = {
   applicationName: APP_NAME,

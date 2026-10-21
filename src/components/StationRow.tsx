@@ -1,4 +1,4 @@
-import { formatCt, formatCtDiff, formatDistance, priceString } from "@/lib/format";
+import { formatCtDiff, formatDistance } from "@/lib/format";
 import type { PriceTier, RankedStation } from "@/lib/pricing";
 import { Price } from "./Price";
 import { StarIcon } from "./icons";
@@ -23,7 +23,7 @@ interface StationRowProps {
 }
 
 export function StationRow({ item, favorite, onSelect }: StationRowProps) {
-  const { station, price, pumpPrice, discount, distanceKm, diffToMin, tier, isCheapest } = item;
+  const { station, price, distanceKm, diffToMin, tier, isCheapest } = item;
   const closed = !station.isOpen;
   const title = stationTitle(station);
   const subtitle = station.brand ? nameWithoutBrand(station) : "";
@@ -64,21 +64,11 @@ export function StationRow({ item, favorite, onSelect }: StationRowProps) {
             {!closed && !Number.isFinite(distanceKm) && <span>영업 중</span>}
             {!closed && <span className="sr-only">영업 중, 가격 {TIER_LABEL[tier]}</span>}
           </span>
-          {discount > 0 && (
-            <span className="mt-1 flex items-center gap-1.5 text-[12px] text-ink-3">
-              <span className="rounded-md bg-accent-soft px-1.5 py-0.5 font-semibold text-accent-soft-ink">
-                카드 <span className="num">−{formatCt(discount)}</span>
-              </span>
-              <span>
-                정가 <span className="num">{priceString(pumpPrice)}</span>
-              </span>
-            </span>
-          )}
         </span>
         <span className="flex shrink-0 flex-col items-end justify-center gap-1">
           <Price
             price={price}
-            label={discount > 0 ? "카드 적용 예상가" : "가격"}
+            label="가격"
             className="text-[27px] leading-none font-bold"
           />
           {isCheapest || (!closed && diffToMin === 0) ? (

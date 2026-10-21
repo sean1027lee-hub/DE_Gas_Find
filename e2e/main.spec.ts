@@ -93,3 +93,26 @@ test("no axe violations on list and detail sheet", async ({ page }) => {
     expect(results.violations.map((v) => `${scheme}: ${v.id} ${v.nodes.map((n) => n.target).join(" ")}`)).toEqual([]);
   }
 });
+
+test("compare tab: national trend, neighbours and taxes", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  await page.goto("/");
+  await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
+  // Market context under the summary links to the compare tab.
+  await page.getByRole("button", { name: /독일 평균 휘발유/ }).click();
+  await expect(page.getByRole("heading", { name: "가격 비교" })).toBeVisible();
+  await expect(page.getByText(/최근 3년 평균\(/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "이웃 나라와 비교" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "1리터 가격 중 세금" })).toBeVisible();
+
+  // Chart is keyboard-explorable.
+  const chart = page.getByRole("group", { name: /주간 평균 가격 추이/ });
+  await chart.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("[aria-live=polite]").filter({ hasText: /주, 리터당/ })).toHaveCount(1);
+
+  await page.getByRole("radio", { name: "디젤" }).click();
+  await page.getByRole("button", { name: "EU 전체 보기" }).click();
+  await expect(page.getByRole("heading", { name: "EU 27개국과 비교" })).toBeVisible();
+  expect((await new AxeBuilder({ page }).withTags(["wcag2aa"]).analyze()).violations).toEqual([]);
+});

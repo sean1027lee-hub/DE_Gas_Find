@@ -20,11 +20,13 @@ interface NearbyListProps {
   stale: boolean;
   favoriteIds: Set<string>;
   onSelect: (station: Station) => void;
+  /** Market context rendered under the summary card. */
+  insight?: React.ReactNode;
 }
 
 const NEXT_RADIUS: Record<Radius, Radius | null> = { 2: 5, 5: 10, 10: 25, 25: null };
 
-export function NearbyList({ result, loading, fuel, radiusKm, sort, litres, stale, favoriteIds, onSelect }: NearbyListProps) {
+export function NearbyList({ result, loading, fuel, radiusKm, sort, litres, stale, favoriteIds, onSelect, insight }: NearbyListProps) {
   const [showClosed, setShowClosed] = useState(false);
 
   if (!result) {
@@ -95,6 +97,7 @@ export function NearbyList({ result, loading, fuel, radiusKm, sort, litres, stal
             stale={stale}
             onSelect={() => onSelect(cheapest.station)}
           />
+          {insight}
         </div>
       )}
 

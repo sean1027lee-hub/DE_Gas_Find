@@ -1,5 +1,3 @@
-import type { BrandGroup } from "./brands";
-
 export type Fuel = "e10" | "e5" | "diesel";
 
 export const FUELS: Fuel[] = ["e10", "e5", "diesel"];
@@ -24,7 +22,6 @@ export interface Station {
   id: string;
   name: string;
   brand: string;
-  brandGroup: BrandGroup | null;
   street: string;
   houseNumber: string;
   postCode: string;

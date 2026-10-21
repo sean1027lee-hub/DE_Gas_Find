@@ -1,26 +1,8 @@
-/** Discount, ranking and price-tier logic. Pure functions, shared by list, map and favourites. */
-import type { BrandGroup } from "./brands";
+/** Ranking and price-tier logic. Pure functions, shared by list, map and favourites. */
 import { distanceKm, type LatLng } from "./geo";
 import type { Fuel, Station } from "./types";
 
-export interface DiscountRules {
-  enabled: boolean;
-  /** Cents per litre at TotalEnergies / Circle K. */
-  totalCt: number;
-  /** Cents per litre at partner brands (Aral, AVIA, Eni, Westfalen). */
-  partnerCt: number;
-}
-
-export const DEFAULT_DISCOUNT: DiscountRules = { enabled: true, totalCt: 3, partnerCt: 2 };
-
-/** Discount in euros per litre for a brand group. */
-export function discountFor(group: BrandGroup | null, rules: DiscountRules): number {
-  if (!rules.enabled || !group) return 0;
-  const ct = group === "total" ? rules.totalCt : rules.partnerCt;
-  return Math.max(0, ct) / 100;
-}
-
-/** Round to 0.1 ct to avoid floating point noise (1.739 - 0.03 = 1.7089999…). */
+/** Round to 0.1 ct to avoid floating point noise. */
 export function roundPrice(price: number): number {
   return Math.round(price * 1000) / 1000;
 }
@@ -31,10 +13,6 @@ export type PriceTier = "low" | "mid" | "high";
 export interface RankedStation {
   station: Station;
   /** Pump price for the selected fuel. */
-  pumpPrice: number;
-  /** Discount per litre (euros). */
-  discount: number;
-  /** Expected price after card discount. */
   price: number;
   distanceKm: number;
   tier: PriceTier;
@@ -49,13 +27,12 @@ export interface RankResult {
   /** Stations in range that do not report a price for this fuel. */
   withoutPrice: number;
   cheapest: RankedStation | null;
-  /** Mean expected price of open stations in range. */
+  /** Mean price of open stations in range. */
   average: number | null;
 }
 
 export interface RankOptions {
   fuel: Fuel;
-  rules: DiscountRules;
   origin: LatLng;
   radiusKm: number;
   sort: SortMode;
@@ -96,13 +73,12 @@ export function rankStations(stations: Station[], opts: RankOptions): RankResult
   for (const station of stations) {
     const d = distanceKm(opts.origin, station);
     if (d > opts.radiusKm) continue;
-    const pumpPrice = station.prices[opts.fuel];
-    if (pumpPrice === null) {
+    const price = station.prices[opts.fuel];
+    if (price === null) {
       withoutPrice++;
       continue;
     }
-    const discount = discountFor(station.brandGroup, opts.rules);
-    inRange.push({ station, pumpPrice, discount, price: roundPrice(pumpPrice - discount), distanceKm: d });
+    inRange.push({ station, price, distanceKm: d });
   }
 
   const openPrices = inRange.filter((r) => r.station.isOpen).map((r) => r.price);
@@ -127,7 +103,7 @@ export function rankStations(stations: Station[], opts: RankOptions): RankResult
   return { open, closed, withoutPrice, cheapest, average };
 }
 
-/** Savings of the cheapest vs. the average for a given fill-up. */
-export function savingsVsAverage(cheapest: number, average: number, litres: number): number {
-  return Math.max(0, Math.round((average - cheapest) * litres * 100) / 100);
+/** Savings for a fill-up when paying `cheaper` instead of `reference` per litre. */
+export function savingsFor(cheaper: number, reference: number, litres: number): number {
+  return Math.max(0, Math.round((reference - cheaper) * litres * 100) / 100);
 }

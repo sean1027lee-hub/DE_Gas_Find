@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from "react";
 import { DARMSTADT } from "./geo";
 import type { NavApp } from "./nav";
-import { DEFAULT_DISCOUNT, type DiscountRules, type SortMode } from "./pricing";
+import type { SortMode } from "./pricing";
 import type { Fuel, Station, StationsResponse } from "./types";
 
 export type Theme = "system" | "light" | "dark";
@@ -27,7 +27,6 @@ export interface Settings {
   radiusKm: Radius;
   sort: SortMode;
   view: ViewMode;
-  discount: DiscountRules;
   navApp: NavApp;
   theme: Theme;
   /** Litres for the "you save x €" line. */
@@ -46,7 +45,6 @@ export const DEFAULT_SETTINGS: Settings = {
   radiusKm: 5,
   sort: "price",
   view: "list",
-  discount: DEFAULT_DISCOUNT,
   navApp: "apple",
   theme: "system",
   litres: 50,
@@ -143,8 +141,8 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 export const settingsStore = createStore<Settings>(KEYS.settings, DEFAULT_SETTINGS, (raw) => {
   if (!isObject(raw)) return DEFAULT_SETTINGS;
-  const merged = { ...DEFAULT_SETTINGS, ...raw } as Settings;
-  merged.discount = { ...DEFAULT_DISCOUNT, ...(isObject(raw.discount) ? raw.discount : {}) };
+  const merged = { ...DEFAULT_SETTINGS, ...raw } as Settings & { discount?: unknown };
+  delete merged.discount; // removed feature (Fleet Card) — drop stale stored value
   if (!RADII.includes(merged.radiusKm)) merged.radiusKm = DEFAULT_SETTINGS.radiusKm;
   return merged;
 });

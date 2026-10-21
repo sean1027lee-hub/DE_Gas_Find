@@ -96,12 +96,11 @@ export class UpstreamError extends Error {
 export type ListStation = z.infer<typeof listStationSchema>;
 
 export function normalizeStation(s: ListStation): Station {
-  const { label, group } = resolveBrand(s.brand, s.name);
+  const { label } = resolveBrand(s.brand, s.name);
   return {
     id: s.id,
     name: s.name || label || "Tankstelle",
     brand: label,
-    brandGroup: group,
     street: s.street,
     houseNumber: s.houseNumber,
     postCode: s.postCode,

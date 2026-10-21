@@ -1,9 +1,11 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useBenchmarks } from "@/hooks/useBenchmarks";
 import { useHydrated, useMediaQuery, useNow, useOnline } from "@/hooks/useClientState";
 import { GPS_LABEL, useNearby } from "@/hooks/useNearby";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { benchmarkFuel, type BenchmarkFuel } from "@/lib/benchmarks";
 import { formatClock } from "@/lib/format";
 import { rankStations } from "@/lib/pricing";
 import { favoritesStore, settingsStore, toggleFavorite, updateSettings } from "@/lib/store";
@@ -15,6 +17,7 @@ import { ControlDock } from "./ControlDock";
 import { FavoritesView } from "./FavoritesView";
 import { Header } from "./Header";
 import { LocationSheet } from "./LocationSheet";
+import { MarketInsight } from "./MarketInsight";
 import { NearbyList } from "./NearbyList";
 import { Onboarding } from "./Onboarding";
 import { RefreshIcon } from "./icons";
@@ -23,6 +26,11 @@ import { StationSheet } from "./StationSheet";
 import { RowSkeleton, StatusMessage } from "./StatusMessage";
 import { SummarySkeleton } from "./SummaryCard";
 import { TabBar, type Tab } from "./TabBar";
+
+const CompareView = dynamic(() => import("./CompareView").then((m) => m.CompareView), {
+  ssr: false,
+  loading: () => <div className="skeleton mx-4 h-64" aria-label="비교 데이터 불러오는 중" />,
+});
 
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
@@ -69,6 +77,8 @@ export function App() {
   const [tab, setTab] = useState<Tab>("nearby");
   const [selected, setSelected] = useState<{ station: Station; fetchedAt: string | null } | null>(null);
   const [locationOpen, setLocationOpen] = useState(false);
+  const benchmarks = useBenchmarks();
+  const [compareFuel, setCompareFuel] = useState<BenchmarkFuel | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const mainRef = useRef<HTMLElement>(null);
   const headerRef = useMeasuredVar("--header-h");
@@ -81,12 +91,11 @@ export function App() {
     if (!data || !effectiveOrigin) return null;
     return rankStations(data.stations, {
       fuel: settings.fuel,
-      rules: settings.discount,
       origin: effectiveOrigin,
       radiusKm: settings.radiusKm,
       sort: settings.sort,
     });
-  }, [data, effectiveOrigin, settings.fuel, settings.discount, settings.radiusKm, settings.sort]);
+  }, [data, effectiveOrigin, settings.fuel, settings.radiusKm, settings.sort]);
 
   const fetchedAt = data ? new Date(data.fetchedAt) : null;
   const stale = !!fetchedAt && now.getTime() - fetchedAt.getTime() > STALE_MS;
@@ -187,11 +196,19 @@ export function App() {
   );
 
   let content: React.ReactNode;
-  if (tab === "favorites") {
+  if (tab === "compare") {
+    content = (
+      <CompareView
+        data={benchmarks}
+        fuel={compareFuel ?? benchmarkFuel(settings.fuel)}
+        onFuelChange={setCompareFuel}
+        litres={settings.litres}
+      />
+    );
+  } else if (tab === "favorites") {
     content = (
       <FavoritesView
         fuel={settings.fuel}
-        rules={settings.discount}
         origin={effectiveOrigin}
         now={now}
         onSelect={(s, at) => openStation(s, at)}
@@ -235,11 +252,25 @@ export function App() {
         stale={stale}
         favoriteIds={favoriteIds}
         onSelect={(s) => openStation(s)}
+        insight={
+          benchmarks && (
+            <MarketInsight
+              data={benchmarks}
+              fuel={settings.fuel}
+              localCheapest={result?.cheapest?.price ?? null}
+              onOpen={() => {
+                setCompareFuel(null);
+                setTab("compare");
+              }}
+            />
+          )
+        }
       />
     );
   }
 
-  const tabTitle = tab === "favorites" ? "즐겨찾기" : tab === "settings" ? "설정" : null;
+  const tabTitle =
+    tab === "compare" ? "가격 비교" : tab === "favorites" ? "즐겨찾기" : tab === "settings" ? "설정" : null;
 
   return (
     <>
@@ -331,7 +362,6 @@ export function App() {
         <StationSheet
           station={selectedStation}
           fuel={settings.fuel}
-          rules={settings.discount}
           origin={effectiveOrigin}
           fetchedAt={selected?.fetchedAt ?? null}
           navApp={settings.navApp}

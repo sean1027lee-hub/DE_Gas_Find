@@ -3,41 +3,41 @@ import { normalizeBrandKey, resolveBrand } from "./brands";
 
 describe("resolveBrand", () => {
   it.each([
-    ["TotalEnergies", "TotalEnergies", "total"],
-    ["TOTAL", "TotalEnergies", "total"],
-    ["Total", "TotalEnergies", "total"],
-    ["Total Energies", "TotalEnergies", "total"],
-    ["Circle K", "Circle K", "total"],
-    ["CIRCLE K", "Circle K", "total"],
-    ["CircleK", "Circle K", "total"],
-    ["ARAL", "Aral", "partner"],
-    ["Aral", "Aral", "partner"],
-    ["AVIA", "AVIA", "partner"],
-    ["Avia Xpress", "AVIA", "partner"],
-    ["ENI", "Eni", "partner"],
-    ["Agip", "Eni", "partner"],
-    ["Westfalen", "Westfalen", "partner"],
-    ["Shell", "Shell", null],
-    ["ESSO", "Esso", null],
-    ["JET", "JET", null],
-  ] as const)("%s → %s (%s)", (raw, label, group) => {
-    expect(resolveBrand(raw)).toEqual({ label, group });
+    ["TotalEnergies", "TotalEnergies"],
+    ["TOTAL", "TotalEnergies"],
+    ["Total", "TotalEnergies"],
+    ["Total Energies", "TotalEnergies"],
+    ["Circle K", "Circle K"],
+    ["CIRCLE K", "Circle K"],
+    ["CircleK", "Circle K"],
+    ["ARAL", "Aral"],
+    ["Aral", "Aral"],
+    ["AVIA", "AVIA"],
+    ["Avia Xpress", "AVIA"],
+    ["ENI", "Eni"],
+    ["Agip", "Eni"],
+    ["Westfalen", "Westfalen"],
+    ["Shell", "Shell"],
+    ["ESSO", "Esso"],
+    ["JET", "JET"],
+  ] as const)("%s → %s", (raw, label) => {
+    expect(resolveBrand(raw)).toEqual({ label });
   });
 
   it("keeps unknown brands as-is without a group", () => {
-    expect(resolveBrand("  Freie Tankstelle Müller ")).toEqual({ label: "Freie Tankstelle Müller", group: null });
+    expect(resolveBrand("  Freie Tankstelle Müller ")).toEqual({ label: "Freie Tankstelle Müller" });
   });
 
   it("falls back to the station name only when the brand is empty", () => {
-    expect(resolveBrand("", "TotalEnergies Darmstadt")).toEqual({ label: "TotalEnergies", group: "total" });
-    expect(resolveBrand(null, "ARAL Tankstelle")).toEqual({ label: "Aral", group: "partner" });
-    expect(resolveBrand("Shell", "Aral alt")).toEqual({ label: "Shell", group: null });
+    expect(resolveBrand("", "TotalEnergies Darmstadt")).toEqual({ label: "TotalEnergies" });
+    expect(resolveBrand(null, "ARAL Tankstelle")).toEqual({ label: "Aral" });
+    expect(resolveBrand("Shell", "Aral alt")).toEqual({ label: "Shell" });
   });
 
   it("does not match brand names inside words", () => {
-    expect(resolveBrand("", "Tankstelle Aralstraße").group).toBeNull();
-    expect(resolveBrand("Totalmarkt").group).toBeNull();
-    expect(resolveBrand("Aviator").group).toBeNull();
+    expect(resolveBrand("", "Tankstelle Aralstraße").label).toBe("");
+    expect(resolveBrand("Totalmarkt").label).toBe("Totalmarkt");
+    expect(resolveBrand("Aviator").label).toBe("Aviator");
   });
 });
 

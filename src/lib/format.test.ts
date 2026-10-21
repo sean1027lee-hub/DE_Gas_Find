@@ -55,3 +55,13 @@ describe("other formats", () => {
     expect(tidyCase("123")).toBe("123");
   });
 });
+
+describe("benchmark formats", async () => {
+  const { formatLitrePrice, formatIsoDate, formatMonthDay } = await import("./format");
+  it("formats per-litre prices and dates", () => {
+    expect(formatLitrePrice(2.214)).toBe("2,214 €");
+    expect(formatLitrePrice(1.5)).toBe("1,500 €");
+    expect(formatIsoDate("2026-10-12")).toBe("2026.10.12");
+    expect(formatMonthDay("2026-03-02")).toBe("3월 2일");
+  });
+});

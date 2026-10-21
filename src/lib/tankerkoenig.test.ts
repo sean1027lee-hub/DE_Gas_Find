@@ -49,7 +49,6 @@ describe("parseListResponse", () => {
     expect(stations).toHaveLength(2);
     expect(stations[0]).toMatchObject({
       brand: "TotalEnergies",
-      brandGroup: "total",
       postCode: "04283",
       houseNumber: "51",
       prices: { e10: 1.749, e5: 1.809, diesel: 1.659 },

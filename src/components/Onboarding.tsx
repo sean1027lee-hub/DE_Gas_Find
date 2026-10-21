@@ -48,7 +48,7 @@ export function Onboarding({ settings, locating, locError, onLocate, onHome, onP
         3초 안에.
       </h1>
       <p className="mt-3 text-[16px] leading-relaxed text-ink-2">
-        독일 공식 실시간 가격(MTS-K)에 내 Fleet Card 할인까지 반영해 비교해요.
+        독일 공식 실시간 가격(MTS-K)으로 주변 주유소를 비교하고, 지금 가격이 평소보다 싼지도 알려드려요.
       </p>
 
       <div className="mt-6 rounded-[var(--radius-card)] bg-board px-4 py-3 ring-1 ring-board-line" aria-hidden="true">

@@ -1,7 +1,5 @@
 "use client";
 import { useState, type ReactNode } from "react";
-import { BRAND_GROUP_LABELS } from "@/lib/brands";
-import { formatCt } from "@/lib/format";
 import { NAV_APP_LABELS, type NavApp } from "@/lib/nav";
 import { resetAll, updateSettings, type Place, type Settings, type Theme } from "@/lib/store";
 import { FUEL_LABELS, FUELS, FUEL_SHORT_LABELS } from "@/lib/types";
@@ -11,7 +9,6 @@ import { ChevronRightIcon, HomeIcon } from "./icons";
 import { PlaceSearch } from "./PlaceSearch";
 import { Segmented } from "./Segmented";
 import { Stepper } from "./Stepper";
-import { Toggle } from "./Toggle";
 
 interface SettingsViewProps {
   settings: Settings;
@@ -43,8 +40,6 @@ function Row({ label, children, sub }: { label: ReactNode; children: ReactNode; 
 export function SettingsView({ settings, currentPosition }: SettingsViewProps) {
   const [homeOpen, setHomeOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const { discount } = settings;
-  const setDiscount = (patch: Partial<Settings["discount"]>) => updateSettings({ discount: { ...discount, ...patch } });
 
   return (
     <div className="pb-4">
@@ -74,40 +69,7 @@ export function SettingsView({ settings, currentPosition }: SettingsViewProps) {
         </button>
       </Section>
 
-      <Section
-        title="Fleet Card 할인"
-        note="할인은 주유기 가격에서 빠지지 않고 월 청구서에서 차감되는 것으로 보여요. 앱은 ‘카드 적용 예상가’로 비교해요."
-      >
-        <Row label="할인 적용해서 비교">
-          <Toggle checked={discount.enabled} onChange={(v) => setDiscount({ enabled: v })} label="카드 할인 적용" />
-        </Row>
-        <Row label={<span lang="de">{BRAND_GROUP_LABELS.total}</span>} sub="리터당">
-          <Stepper
-            label="TotalEnergies 할인"
-            value={discount.totalCt}
-            onChange={(v) => setDiscount({ totalCt: v })}
-            min={0}
-            max={15}
-            step={0.5}
-            format={(v) => formatCt(v / 100)}
-            disabled={!discount.enabled}
-          />
-        </Row>
-        <Row label={<span lang="de">{BRAND_GROUP_LABELS.partner}</span>} sub="리터당">
-          <Stepper
-            label="제휴 주유소 할인"
-            value={discount.partnerCt}
-            onChange={(v) => setDiscount({ partnerCt: v })}
-            min={0}
-            max={15}
-            step={0.5}
-            format={(v) => formatCt(v / 100)}
-            disabled={!discount.enabled}
-          />
-        </Row>
-      </Section>
-
-      <Section title="절약액 계산 기준" note="요약 카드의 “50L 주유 시 절약” 같은 계산에 쓰여요.">
+      <Section title="절약액 계산 기준" note="요약 카드와 비교 탭의 “50L 주유하면” 계산에 쓰여요.">
         <Row label="한 번 주유량">
           <Stepper
             label="주유량"
@@ -162,6 +124,13 @@ export function SettingsView({ settings, currentPosition }: SettingsViewProps) {
               Tankerkönig
             </a>{" "}
             / MTS-K (CC BY 4.0). 주유소가 신고한 가격으로, 실제 주유기 가격과 잠시 다를 수 있어요.
+          </p>
+          <p className="mt-2">
+            비교 지표: EU 집행위원회{" "}
+            <a className="text-accent underline underline-offset-2" href="https://energy.ec.europa.eu/data-and-analysis/weekly-oil-bulletin_en" target="_blank" rel="noopener">
+              Weekly Oil Bulletin
+            </a>{" "}
+            (© European Union, CC BY 4.0). 매주 월요일 기준 국가 평균 가격이에요.
           </p>
           <p className="mt-2">
             지도: © OpenFreeMap © OpenMapTiles © OpenStreetMap 기여자. 위치 검색: Nominatim (OpenStreetMap).

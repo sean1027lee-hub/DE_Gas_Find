@@ -3,7 +3,7 @@ import { priceParts, priceString } from "@/lib/format";
 interface PriceProps {
   price: number;
   className?: string;
-  /** Prefix for the accessible text, e.g. "카드 적용 예상가". */
+  /** Prefix for the accessible text, e.g. "최저가". */
   label?: string;
 }
 

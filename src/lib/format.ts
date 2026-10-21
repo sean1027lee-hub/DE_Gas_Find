@@ -76,3 +76,18 @@ export function tidyCase(text: string): string {
     .toLowerCase()
     .replace(/(^|[\s\-/(.])([a-zäöüß])/g, (_, sep: string, ch: string) => sep + ch.toUpperCase());
 }
+
+/** 2.214 → "2,214 €" (per litre, three decimals as published). */
+export function formatLitrePrice(price: number): string {
+  return `${price.toFixed(3).replace(".", ",")} €`;
+}
+
+/** "2026-10-12" → "2026.10.12" */
+export function formatIsoDate(iso: string): string {
+  return iso.replaceAll("-", ".");
+}
+
+/** "2026-10-12" → "10월 12일" */
+export function formatMonthDay(iso: string): string {
+  return `${Number(iso.slice(5, 7))}월 ${Number(iso.slice(8, 10))}일`;
+}

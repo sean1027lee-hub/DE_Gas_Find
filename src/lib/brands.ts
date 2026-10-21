@@ -1,38 +1,35 @@
 /**
- * Brand normalisation for Tankerkönig `brand` strings.
- * Single source of truth for display labels and Fleet Card discount groups.
+ * Brand normalisation for Tankerkönig `brand` strings: one display label per brand,
+ * whatever spelling the station operator reported ("ARAL", "Total", "CircleK" …).
  */
-
-export type BrandGroup = "total" | "partner";
 
 interface BrandRule {
   label: string;
-  group: BrandGroup | null;
   /** Matched against the normalised brand (lowercase, no punctuation). */
   patterns: RegExp[];
 }
 
 const BRAND_RULES: BrandRule[] = [
-  { label: "TotalEnergies", group: "total", patterns: [/^total( ?energies)?\b/, /^totalenergies/] },
-  { label: "Circle K", group: "total", patterns: [/^circle ?k\b/] },
-  { label: "Aral", group: "partner", patterns: [/^aral\b/] },
-  { label: "AVIA", group: "partner", patterns: [/^avia\b/] },
-  { label: "Eni", group: "partner", patterns: [/^eni\b/, /^agip\b/, /^eni ?agip\b/] },
-  { label: "Westfalen", group: "partner", patterns: [/^westfalen\b/] },
-  { label: "Shell", group: null, patterns: [/^shell\b/] },
-  { label: "Esso", group: null, patterns: [/^esso\b/] },
-  { label: "JET", group: null, patterns: [/^jet\b/] },
-  { label: "bft", group: null, patterns: [/^bft\b/] },
-  { label: "OMV", group: null, patterns: [/^omv\b/] },
-  { label: "ORLEN", group: null, patterns: [/^orlen\b/] },
-  { label: "STAR", group: null, patterns: [/^star\b/] },
-  { label: "HEM", group: null, patterns: [/^hem\b/] },
-  { label: "Raiffeisen", group: null, patterns: [/^raiffeisen\b/] },
-  { label: "Hoyer", group: null, patterns: [/^hoyer\b/] },
-  { label: "Tamoil", group: null, patterns: [/^tamoil\b/] },
-  { label: "Q1", group: null, patterns: [/^q1\b/] },
-  { label: "Globus", group: null, patterns: [/^globus\b/] },
-  { label: "Supermarkt-Tankstelle", group: null, patterns: [/^supermarkt/] },
+  { label: "TotalEnergies", patterns: [/^total( ?energies)?\b/, /^totalenergies/] },
+  { label: "Circle K", patterns: [/^circle ?k\b/] },
+  { label: "Aral", patterns: [/^aral\b/] },
+  { label: "AVIA", patterns: [/^avia\b/] },
+  { label: "Eni", patterns: [/^eni\b/, /^agip\b/, /^eni ?agip\b/] },
+  { label: "Westfalen", patterns: [/^westfalen\b/] },
+  { label: "Shell", patterns: [/^shell\b/] },
+  { label: "Esso", patterns: [/^esso\b/] },
+  { label: "JET", patterns: [/^jet\b/] },
+  { label: "bft", patterns: [/^bft\b/] },
+  { label: "OMV", patterns: [/^omv\b/] },
+  { label: "ORLEN", patterns: [/^orlen\b/] },
+  { label: "STAR", patterns: [/^star\b/] },
+  { label: "HEM", patterns: [/^hem\b/] },
+  { label: "Raiffeisen", patterns: [/^raiffeisen\b/] },
+  { label: "Hoyer", patterns: [/^hoyer\b/] },
+  { label: "Tamoil", patterns: [/^tamoil\b/] },
+  { label: "Q1", patterns: [/^q1\b/] },
+  { label: "Globus", patterns: [/^globus\b/] },
+  { label: "Supermarkt-Tankstelle", patterns: [/^supermarkt/] },
 ];
 
 /** Lowercase, strip accents and punctuation, collapse whitespace. */
@@ -53,22 +50,16 @@ function matchRule(key: string): BrandRule | undefined {
 export interface BrandInfo {
   /** Display label; falls back to the raw brand (trimmed) or an empty string. */
   label: string;
-  group: BrandGroup | null;
 }
 
 /**
- * Resolve brand label and discount group. Falls back to the station name when the
+ * Resolve the display label. Falls back to the station name when the
  * brand field is empty (Tankerkönig sometimes leaves it blank), but only when the
  * name *starts* with a known brand to avoid matches like "Aralstraße".
  */
 export function resolveBrand(brand: string | null | undefined, name?: string | null): BrandInfo {
   const brandKey = normalizeBrandKey(brand);
   const rule = matchRule(brandKey) ?? (brandKey ? undefined : matchRule(normalizeBrandKey(name)));
-  if (rule) return { label: rule.label, group: rule.group };
-  return { label: (brand ?? "").trim(), group: null };
+  if (rule) return { label: rule.label };
+  return { label: (brand ?? "").trim() };
 }
-
-export const BRAND_GROUP_LABELS: Record<BrandGroup, string> = {
-  total: "TotalEnergies · Circle K",
-  partner: "Aral · AVIA · Eni · Westfalen",
-};

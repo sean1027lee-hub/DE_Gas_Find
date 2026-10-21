@@ -1,9 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { formatClock, formatCt, formatDistance, formatAge } from "@/lib/format";
+import { formatClock, formatDistance, formatAge } from "@/lib/format";
 import { distanceKm, type LatLng } from "@/lib/geo";
 import { NAV_APP_LABELS, navUrl, type NavApp } from "@/lib/nav";
-import { discountFor, roundPrice, type DiscountRules } from "@/lib/pricing";
 import { FUEL_LABELS, FUELS, type Fuel, type Station, type StationDetail } from "@/lib/types";
 import { BottomSheet } from "./BottomSheet";
 import { Button, LinkButton } from "./Button";
@@ -14,7 +13,6 @@ import { stationAddress, stationTitle, nameWithoutBrand } from "./station-text";
 interface StationSheetProps {
   station: Station | null;
   fuel: Fuel;
-  rules: DiscountRules;
   origin: LatLng | null;
   fetchedAt: string | null;
   navApp: NavApp;
@@ -53,7 +51,6 @@ const hhmm = (t: string) => t.slice(0, 5);
 export function StationSheet({
   station,
   fuel,
-  rules,
   origin,
   fetchedAt,
   navApp,
@@ -64,7 +61,6 @@ export function StationSheet({
   const { detail, loading, failed } = useDetail(station?.id);
   if (!station) return null;
 
-  const discount = discountFor(station.brandGroup, rules);
   const other: NavApp = navApp === "apple" ? "google" : "apple";
   const label = `${stationTitle(station)} ${nameWithoutBrand(station)}`.trim();
   const fetched = fetchedAt ? new Date(fetchedAt) : null;
@@ -121,30 +117,13 @@ export function StationSheet({
               {pump === null ? (
                 <span className={`mt-1 text-[14px] ${selected ? "text-board-ink-2" : "text-ink-3"}`}>판매 안 함</span>
               ) : (
-                <>
-                  <Price
-                    price={discount ? roundPrice(pump - discount) : pump}
-                    label={discount ? "카드 적용 예상가" : "가격"}
-                    className="mt-0.5 text-[22px] leading-tight font-bold"
-                  />
-                  {discount > 0 && (
-                    <span className={`text-[12px] ${selected ? "text-board-ink-2" : "text-ink-3"}`}>
-                      정가 <Price price={pump} className="text-[12px]" />
-                    </span>
-                  )}
-                </>
+                <Price price={pump} label="가격" className="mt-0.5 text-[22px] leading-tight font-bold" />
               )}
             </li>
           );
         })}
       </ul>
 
-      {discount > 0 && (
-        <p className="mt-3 rounded-[10px] bg-accent-soft px-3 py-2.5 text-[13px] leading-relaxed text-accent-soft-ink">
-          Fleet Card 리터당 <span className="num">−{formatCt(discount)}</span> 적용 예상가예요. 주유기에는 정가가 표시되고, 할인은 월 청구서에서
-          차감되는 것으로 보여요.
-        </p>
-      )}
 
       <dl className="mt-4 divide-y divide-line text-[15px]">
         <div className="flex gap-3 py-3">

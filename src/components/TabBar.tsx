@@ -1,10 +1,11 @@
 "use client";
-import { NearbyIcon, SettingsIcon, StarIcon } from "./icons";
+import { NearbyIcon, SettingsIcon, StarIcon, TrendIcon } from "./icons";
 
-export type Tab = "nearby" | "favorites" | "settings";
+export type Tab = "nearby" | "compare" | "favorites" | "settings";
 
 const TABS: { id: Tab; label: string; Icon: typeof NearbyIcon }[] = [
   { id: "nearby", label: "주변", Icon: NearbyIcon },
+  { id: "compare", label: "비교", Icon: TrendIcon },
   { id: "favorites", label: "즐겨찾기", Icon: StarIcon },
   { id: "settings", label: "설정", Icon: SettingsIcon },
 ];

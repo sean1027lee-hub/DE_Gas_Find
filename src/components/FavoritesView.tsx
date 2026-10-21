@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatAge, formatClock } from "@/lib/format";
 import type { LatLng } from "@/lib/geo";
-import { rankStations, type DiscountRules } from "@/lib/pricing";
+import { rankStations } from "@/lib/pricing";
 import { favoritesStore } from "@/lib/store";
 import { FUEL_LABELS, type Fuel, type PricesResponse, type Station } from "@/lib/types";
 import { RefreshIcon, StarIcon } from "./icons";
@@ -12,14 +12,13 @@ import { stationTitle, nameWithoutBrand } from "./station-text";
 
 interface FavoritesViewProps {
   fuel: Fuel;
-  rules: DiscountRules;
   origin: LatLng | null;
   now: Date;
   onSelect: (station: Station, fetchedAt: string | null) => void;
 }
 
 /** Saved stations, refreshed in one prices.php round trip (server batches by 10). */
-export function FavoritesView({ fuel, rules, origin, now, onSelect }: FavoritesViewProps) {
+export function FavoritesView({ fuel, origin, now, onSelect }: FavoritesViewProps) {
   const favorites = favoritesStore.use();
   const [reload, setReload] = useState(0);
   const idsKey = favorites.map((f) => f.station.id).sort().join(",");
@@ -66,12 +65,11 @@ export function FavoritesView({ fuel, rules, origin, now, onSelect }: FavoritesV
     () =>
       rankStations(stations, {
         fuel,
-        rules,
         origin: origin ?? stations[0] ?? { lat: 0, lng: 0 },
         radiusKm: Infinity,
         sort: "price",
       }),
-    [stations, fuel, rules, origin],
+    [stations, fuel, origin],
   );
   const withoutPrice = stations.filter((s) => s.prices[fuel] === null);
   const fetchedAt = prices ? new Date(prices.fetchedAt) : null;

@@ -61,7 +61,7 @@ export function mockStations(center: LatLng, radiusKm: number): Station[] {
     const lat = center.lat + (r / 111.32) * Math.cos(angle);
     const lng = center.lng + (r / (111.32 * Math.cos((center.lat * Math.PI) / 180))) * Math.sin(angle);
     const rawBrand = BRANDS[Math.floor(rand() * BRANDS.length)];
-    const { label, group } = resolveBrand(rawBrand);
+    const { label } = resolveBrand(rawBrand);
     const [postCode, place] = PLACES[Math.floor(rand() * PLACES.length)];
     const street = STREETS[Math.floor(rand() * STREETS.length)];
     const premium = label === "Shell" || label === "Aral" ? 0.04 : label === "JET" || label === "bft" ? -0.03 : 0;
@@ -72,7 +72,6 @@ export function mockStations(center: LatLng, radiusKm: number): Station[] {
       id: uuidFrom(rand),
       name: label ? `${label} ${place} ${street.split(" ")[0]}` : `Freie Tankstelle ${place}`,
       brand: label,
-      brandGroup: group,
       street,
       houseNumber: String(1 + Math.floor(rand() * 180)),
       postCode,
