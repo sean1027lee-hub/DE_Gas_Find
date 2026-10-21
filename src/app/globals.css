@@ -5,7 +5,11 @@
 /*
  * Design tokens.
  * - One accent (signal blue) for interaction only.
- * - Price tiers use their own semantic colours and are never used for interaction.
+ * - Price tiers (low/mid/high) have three roles each: `ink` for text on surfaces
+ *   (≥ 4.5:1), `soft` for badge backgrounds, `solid` for fills such as map pins
+ *   with `on-*` text on top. Tiers always come with a shape (▼ ━ ▲) and a label,
+ *   never colour alone. Yellow `mid-solid` is only 1.8:1 on white, so it always
+ *   gets a `mid` (dark) outline where it sits on a light surface.
  * - The "board" is the fuel price sign: dark plate, warm bright digits — in both themes.
  * Contrast pairs are WCAG AA (≥ 4.5:1 for text) against their intended surface.
  */
@@ -29,10 +33,16 @@
   --board-ink-2: #a6afb9;
   --low: #0b7a3e;
   --low-soft: #dff3e6;
-  --mid: #8a5a00;
-  --mid-soft: #f8edd5;
+  --low-solid: #0b7a3e;
+  --on-low: #ffffff;
+  --mid: #7a5500;
+  --mid-soft: #fbf0d0;
+  --mid-solid: #f2b705;
+  --on-mid: #1a1300;
   --high: #b3261e;
   --high-soft: #fbe5e3;
+  --high-solid: #c42b1c;
+  --on-high: #ffffff;
   --warn-soft: #fff4d6;
   --warn-ink: #6b4a00;
   --focus: #1d4ed8;
@@ -60,10 +70,16 @@
   --board-ink-2: #98a2ad;
   --low: #5fd38f;
   --low-soft: #12291c;
+  --low-solid: #4cc77f;
+  --on-low: #06210f;
   --mid: #e8b54d;
   --mid-soft: #2b2312;
+  --mid-solid: #f2c14e;
+  --on-mid: #1a1300;
   --high: #ff8577;
   --high-soft: #34171a;
+  --high-solid: #ff6f61;
+  --on-high: #2a0a06;
   --warn-soft: #2b2312;
   --warn-ink: #f1cd7e;
   --focus: #7aa5ff;
@@ -94,15 +110,39 @@
   --color-mid-soft: var(--mid-soft);
   --color-high: var(--high);
   --color-high-soft: var(--high-soft);
+  --color-low-solid: var(--low-solid);
+  --color-on-low: var(--on-low);
+  --color-mid-solid: var(--mid-solid);
+  --color-on-mid: var(--on-mid);
+  --color-high-solid: var(--high-solid);
+  --color-on-high: var(--on-high);
   --color-warn-soft: var(--warn-soft);
   --color-warn-ink: var(--warn-ink);
 
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
     "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
-  --radius-card: 14px;
-  --radius-control: 10px;
+  /*
+   * Type scale in rem, so it follows the system text size (iOS Dynamic Type via
+   * -apple-system-body below; browser font size elsewhere).
+   */
+  --text-2xs: 0.6875rem; /* 11 */
+  --text-meta: 0.8125rem; /* 13 */
+  --text-ui: 0.9375rem; /* 15 */
+  --text-title: 1.0625rem; /* 17 */
+  --text-h2: 1.3125rem; /* 21 */
+  --text-price-sm: 1.375rem; /* 22 */
+  --text-price: 1.6875rem; /* 27 */
+  --text-display-sm: 1.875rem; /* 30 */
+  --text-display-md: 3rem; /* 48 */
+  --text-display: 3.5rem; /* 56 */
+
+  --radius-card: 16px;
+  --radius-control: 12px;
+
+  --ease-out-soft: cubic-bezier(0.2, 0.9, 0.3, 1);
+  --duration-count: 400ms;
 }
 
 @layer base {
@@ -110,6 +150,14 @@
     background: var(--bg);
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* iOS only: follow the system text size (Settings → Display → Text Size). */
+  @supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
+    html {
+      font: -apple-system-body;
+      line-height: 1.5;
+    }
   }
 
   body {
@@ -136,12 +184,12 @@
 }
 
 @layer components {
-  /* Prices: monospaced tabular digits so columns line up. */
+  /* Prices: bold sans with tabular digits so columns line up (Toss-style). */
   .num {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum", "zero" 0;
-    letter-spacing: -0.02em;
+    font-feature-settings: "tnum", "ss06";
+    letter-spacing: -0.035em;
   }
 
   /* Sans digits that line up (distances, times). */
@@ -149,9 +197,8 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Monospace commas are as wide as digits; pull them in. */
   .price-comma {
-    margin-inline: -0.16em -0.12em;
+    margin-inline: 0.01em;
   }
 
   /* Pump-style superscript tenth of a cent. */
@@ -258,16 +305,25 @@ html:not([data-onboarded]) .tp-boot {
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.3) !important;
 }
 .tp-dot[data-tier="low"] {
-  background: var(--low);
+  background: var(--low-solid);
 }
 .tp-dot[data-tier="mid"] {
-  background: var(--mid);
+  background: var(--mid-solid);
+  box-shadow: 0 0 0 1.5px var(--mid), 0 1px 3px rgb(0 0 0 / 0.3) !important;
 }
 .tp-dot[data-tier="high"] {
-  background: var(--high);
+  background: var(--high-solid);
 }
 .tp-dot[data-tier="closed"] {
   background: var(--ink-3);
+}
+.tp-dot svg {
+  display: none;
+}
+/* Selected pin: accent outline so it stands out from tier colours. */
+.tp-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }
 /* Keep a comfortable tap target around the dot. */
 .tp-dot::after {

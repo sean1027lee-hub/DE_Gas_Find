@@ -7,9 +7,11 @@ import { useSyncExternalStore } from "react";
 import { DARMSTADT } from "./geo";
 import type { NavApp } from "./nav";
 import type { SortMode } from "./pricing";
+import type { Observation } from "./timing";
 import type { Fuel, Station, StationsResponse } from "./types";
 
 export type Theme = "system" | "light" | "dark";
+export type LangPref = "auto" | "ko" | "de" | "en";
 export type ViewMode = "list" | "map";
 export type LocationMode = "gps" | "home" | "place";
 export const RADII = [2, 5, 10, 25] as const;
@@ -37,6 +39,7 @@ export interface Settings {
   place: Place | null;
   /** The user granted location through our button at least once. */
   gpsGranted: boolean;
+  lang: LangPref;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -52,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   locationMode: "gps",
   place: null,
   gpsGranted: false,
+  lang: "auto",
 };
 
 export interface FavoriteStation {
@@ -155,6 +159,13 @@ export const lastResultStore = createStore<LastResult | null>(KEYS.last, null, (
   isObject(raw) && isObject(raw.response) && isObject(raw.origin) ? (raw as unknown as LastResult) : null,
 );
 
+/** Cheapest nearby prices seen on this device (live data only), for "지금 넣을까?". */
+export const observationsStore = createStore<Observation[]>("tp:obs", [], (raw) =>
+  Array.isArray(raw)
+    ? (raw as Observation[]).filter((o) => isObject(o) && typeof o.t === "number" && typeof o.price === "number")
+    : [],
+);
+
 export function updateSettings(patch: Partial<Settings>) {
   settingsStore.set((prev) => ({ ...prev, ...patch }));
 }
@@ -186,6 +197,7 @@ export function resetAll() {
   settingsStore.clear();
   favoritesStore.clear();
   lastResultStore.clear();
+  observationsStore.clear();
 }
 
 /** Inline script for <head>: apply the theme before first paint to avoid a flash. */

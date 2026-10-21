@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
-import "@fontsource-variable/jetbrains-mono/wght.css";
-import "./globals.css";
+import "../globals.css";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { LANGS, type Lang } from "@/i18n/langs";
 import { THEME_BOOT_SCRIPT } from "@/lib/store";
 
 const APP_NAME = "Tankpreis";
@@ -49,9 +49,16 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+/** One static page per language; proxy.ts picks one for "/" from the cookie or Accept-Language. */
+export function generateStaticParams() {
+  return LANGS.map((lang) => ({ lang }));
+}
+export const dynamicParams = false;
+
+export default async function RootLayout({ children, params }: LayoutProps<"/[lang]">) {
+  const { lang } = await params;
   return (
-    <html lang="ko" data-theme="light" suppressHydrationWarning>
+    <html lang={lang as Lang} data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>

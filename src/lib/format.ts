@@ -54,14 +54,14 @@ export function formatClock(date: Date): string {
   return date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
-/** Relative age in Korean: "방금", "3분 전", "2시간 전" */
-export function formatAge(from: Date, now: Date = new Date()): string {
+/** Relative age as an i18n key + count: "age.min" + 3 → "3분 전" / "vor 3 Min." */
+export function ageParts(from: Date, now: Date = new Date()): { key: "age.now" | "age.min" | "age.hour" | "age.day"; n: number } {
   const minutes = Math.floor((now.getTime() - from.getTime()) / 60000);
-  if (minutes < 1) return "방금";
-  if (minutes < 60) return `${minutes}분 전`;
+  if (minutes < 1) return { key: "age.now", n: 0 };
+  if (minutes < 60) return { key: "age.min", n: minutes };
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  return `${Math.floor(hours / 24)}일 전`;
+  if (hours < 24) return { key: "age.hour", n: hours };
+  return { key: "age.day", n: Math.floor(hours / 24) };
 }
 
 /** "Heidelberger Str." + "12" → "Heidelberger Str. 12" */
@@ -87,7 +87,14 @@ export function formatIsoDate(iso: string): string {
   return iso.replaceAll("-", ".");
 }
 
-/** "2026-10-12" → "10월 12일" */
-export function formatMonthDay(iso: string): string {
-  return `${Number(iso.slice(5, 7))}월 ${Number(iso.slice(8, 10))}일`;
+const LOCALES: Record<string, string> = { ko: "ko-KR", de: "de-DE", en: "en-GB" };
+
+/** "2026-10-12" → "10월 12일" / "12. Okt." / "12 Oct" */
+export function formatMonthDay(iso: string, lang = "ko"): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return new Intl.DateTimeFormat(LOCALES[lang] ?? "en-GB", {
+    month: lang === "ko" ? "long" : "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(d);
 }

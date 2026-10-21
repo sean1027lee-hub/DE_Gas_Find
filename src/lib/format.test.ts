@@ -63,5 +63,7 @@ describe("benchmark formats", async () => {
     expect(formatLitrePrice(1.5)).toBe("1,500 €");
     expect(formatIsoDate("2026-10-12")).toBe("2026.10.12");
     expect(formatMonthDay("2026-03-02")).toBe("3월 2일");
+    expect(formatMonthDay("2026-03-02", "de")).toBe("2. März");
+    expect(formatMonthDay("2026-10-12", "en")).toBe("12 Oct");
   });
 });
