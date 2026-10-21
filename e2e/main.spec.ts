@@ -125,15 +125,20 @@ test("timing: '지금 넣을까?' explains the 12:00 rule with a 24-hour forecas
   await expect(card).toContainText("지금 넣어도 좋아요");
   await card.click();
   const sheet = page.getByRole("dialog");
-  await expect(sheet.getByRole("list", { name: "시간대별 예상 가격" }).getByRole("listitem")).toHaveCount(24);
+  await expect(sheet.getByRole("list", { name: "시간대별 가격 흐름 예상" }).getByRole("listitem")).toHaveCount(24);
   await expect(sheet).toContainText("12시에만 가격을 올릴 수 있어요");
+  // No precise future prices — only directions and ranges.
+  await expect(sheet).toContainText("12시 이후엔 리터당 최대 약 15ct");
+  await expect(sheet.getByRole("list", { name: "시간대별 가격 흐름 예상" })).not.toContainText(/\d,\d{3}/);
   expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(["wcag2aa"]).analyze()).violations).toEqual([]);
 });
 
 test("timing after the noon raise suggests waiting", async ({ page }) => {
   await page.goto("/?at=13:10");
   await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
-  await expect(page.getByRole("button", { name: /지금 넣을까/ })).toContainText("기다려 보세요");
+  const card = page.getByRole("button", { name: /지금 넣을까/ });
+  await expect(card).toContainText("기다려 보세요");
+  await expect(card).toContainText(/50L에 약 \d+,\d0(–\d+,\d0)? €/);
 });
 
 test("preview scenarios: empty and error states lead somewhere", async ({ page }) => {

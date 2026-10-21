@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { addObservation, advise, forecast, learnCurve, phaseAt, typicalOffsetCt, type Observation } from "./timing";
+import {
+  addObservation,
+  advise,
+  directionHitRate,
+  forecast,
+  learnCurve,
+  phaseAt,
+  trendOf,
+  typicalOffsetCt,
+  type Observation,
+} from "./timing";
 
 describe("typical curve (12:00 rule)", () => {
   const at = (h: number) => typicalOffsetCt(h);
@@ -36,17 +46,36 @@ describe("advice", () => {
     expect(phaseAt(3)).toBe("night");
   });
 
-  it("before noon: buying now beats waiting, and warns about the raise", () => {
-    const a = advise(1.799, 10.5, (h) => typicalOffsetCt(h));
+  it("before noon: no meaningful saving from waiting; the rise is capped by the ADAC daily spread", () => {
+    const a = advise(1.799, 10.5, (h) => typicalOffsetCt(h), "e10");
     expect(a.phase).toBe("beforeNoon");
-    expect(a.noonJumpCt).toBeGreaterThan(5);
-    expect(a.waitSavingCt).toBeLessThan(1.5);
+    expect(a.noonMaxCt).toBe(15);
+    expect(a.waitRangeCt === null || a.waitRangeCt[1] <= 1).toBe(true);
+    expect(advise(1.799, 10.5, (h) => typicalOffsetCt(h, "diesel"), "diesel").noonMaxCt).toBe(18);
   });
 
-  it("after the raise: waiting saves money", () => {
-    const a = advise(1.899, 12.2, (h) => typicalOffsetCt(h));
-    expect(a.waitSavingCt).toBeGreaterThan(8);
-    expect(a.best.hour).toBeLessThan(12);
+  it("after the raise: waiting may save money, shown as a range", () => {
+    const a = advise(1.899, 12.2, (h) => typicalOffsetCt(h), "e10");
+    expect(a.noonMaxCt).toBeNull();
+    expect(a.waitRangeCt).not.toBeNull();
+    const [low, high] = a.waitRangeCt!;
+    expect(low).toBeGreaterThanOrEqual(1);
+    expect(high).toBeGreaterThan(low);
+    // During the day we only suggest waiting a few hours, not until tomorrow.
+    expect(a.best.inHours).toBeLessThanOrEqual(8);
+    expect(a.best.hour).toBeGreaterThan(12);
+  });
+
+  it("at night the suggestion is tomorrow morning", () => {
+    const a = advise(1.799, 23, (h) => typicalOffsetCt(h), "e10");
+    expect(a.phase).toBe("night");
+    expect(a.best.hour).toBe(11);
+  });
+
+  it("classifies directions with a ±1 ct dead band", () => {
+    expect(trendOf(-2)).toBe("lower");
+    expect(trendOf(0.4)).toBe("same");
+    expect(trendOf(3)).toBe("higher");
   });
 
   it("forecast starts at the current price", () => {
@@ -77,6 +106,16 @@ describe("learning from observations", () => {
     expect(learned.days).toBe(4);
     expect(learned.curve(19)).toBeLessThan(learned.curve(13));
     expect(learned.curve(19)).toBeLessThan(learned.curve(8));
+  });
+
+  it("scores the direction of real changes", () => {
+    const learned = learnCurve(obs, "e10")!;
+    const rate = directionHitRate(obs, "e10", learned.curve);
+    expect(rate).not.toBeNull();
+    expect(rate!).toBeGreaterThanOrEqual(60);
+    // A curve that predicts the opposite direction scores badly.
+    const inverted = (h: number) => -learned.curve(h);
+    expect(directionHitRate(obs, "e10", inverted)!).toBeLessThan(50);
   });
 
   it("deduplicates and expires observations", () => {

@@ -137,7 +137,7 @@ export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewPro
 
       {/* What it means for one fill-up */}
       <Card id="cmp-fill" title={t("cmp.fillTitle", { litres })} sub={t("cmp.fillSub")}>
-        <dl className="grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(5.25rem,1fr))] gap-2">
           <Stat label={t("cmp.thisWeek")} value={formatEuro(three.latest.price * litres)} />
           <Stat
             label={t("cmp.yearAgo")}
@@ -185,7 +185,7 @@ export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewPro
             })}
           />
         </div>
-        <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
+        <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(5.25rem,1fr))] gap-2">
           <Stat label={t("cmp.statAvg", { n: range })} value={formatLitrePrice(ranged.average)} />
           <Stat label={t("cmp.min")} value={formatLitrePrice(ranged.min.price)} note={ranged.min.date.replaceAll("-", ".")} />
           <Stat label={t("cmp.max")} value={formatLitrePrice(ranged.max.price)} note={ranged.max.date.replaceAll("-", ".")} />

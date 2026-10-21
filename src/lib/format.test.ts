@@ -67,3 +67,12 @@ describe("benchmark formats", async () => {
     expect(formatMonthDay("2026-10-12", "en")).toBe("12 Oct");
   });
 });
+
+describe("formatEuroRange", async () => {
+  const { formatEuroRange } = await import("./format");
+  it("rounds to 0,50 € and merges equal ends", () => {
+    expect(formatEuroRange(1.37, 2.81)).toBe("1,50–3,00 €");
+    expect(formatEuroRange(2.1, 2.2)).toBe("2,00 €");
+    expect(formatEuroRange(0.1, 0.3)).toBe("0,50 €");
+  });
+});

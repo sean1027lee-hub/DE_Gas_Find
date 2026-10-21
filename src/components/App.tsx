@@ -12,7 +12,7 @@ import { snapToGrid } from "@/lib/geo";
 import { rankStations } from "@/lib/pricing";
 import { scenario, scenarioClock } from "@/lib/scenario";
 import { favoritesStore, observationsStore, settingsStore, toggleFavorite, updateSettings } from "@/lib/store";
-import { addObservation, berlinClock, learnCurve, typicalOffsetCt } from "@/lib/timing";
+import { addObservation, berlinClock, directionHitRate, learnCurve, TIMING_ENABLED, typicalOffsetCt } from "@/lib/timing";
 import { FUEL_LABELS, FUELS, type Station } from "@/lib/types";
 import { Attribution } from "./Attribution";
 import { Banner, BannerAction } from "./Banner";
@@ -137,20 +137,25 @@ function AppInner() {
   }, [data, effectiveOrigin]);
 
   const timing: TimingModel | null = useMemo(() => {
-    if (!result?.cheapest || !effectiveOrigin) return null;
+    if (!TIMING_ENABLED || !result?.cheapest || !effectiveOrigin) return null;
     const override = scenarioClock();
     const clock = override
       ? { hour: Number(override.split(":")[0]), minute: Number(override.split(":")[1]) }
       : berlinClock(now);
     const cell = cellOf(effectiveOrigin);
-    const learned =
-      data?.source === "live" ? learnCurve(observations.filter((o) => o.cell === cell), settings.fuel) : null;
     const fuel = settings.fuel;
+    const local = observations.filter((o) => o.cell === cell);
+    const learned = data?.source === "live" ? learnCurve(local, fuel) : null;
+    // Use the local curve only once it has proven itself on the direction of real changes.
+    const hitRate = learned ? directionHitRate(local, fuel, learned.curve) : null;
+    const trusted = learned && hitRate !== null && hitRate >= 60;
     return {
       nowPrice: result.cheapest.price,
       nowHour: clock.hour + clock.minute / 60,
-      curve: learned?.curve ?? ((h: number) => typicalOffsetCt(h, fuel)),
-      learnedDays: learned?.days ?? null,
+      curve: trusted ? learned.curve : (h: number) => typicalOffsetCt(h, fuel),
+      fuel,
+      learnedDays: trusted ? learned.days : null,
+      hitRate: trusted ? hitRate : null,
     };
   }, [result, effectiveOrigin, now, observations, data, settings.fuel]);
 
@@ -280,7 +285,7 @@ function AppInner() {
         navApp={settings.navApp}
         onSelect={() => openStation(result.cheapest!.station)}
       />
-      {timing && <TimingCard model={timing} onOpen={() => setTimingOpen(true)} />}
+      {timing && <TimingCard model={timing} litres={settings.litres} onOpen={() => setTimingOpen(true)} />}
       {benchmarks && (
         <MarketInsight
           data={benchmarks}

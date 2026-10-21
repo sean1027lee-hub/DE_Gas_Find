@@ -98,3 +98,15 @@ export function formatMonthDay(iso: string, lang = "ko"): string {
     timeZone: "UTC",
   }).format(d);
 }
+
+/**
+ * Money range rounded to 0,50 € so it never looks more precise than it is:
+ * (1.37, 2.81) → "1,50–3,00 €"; equal ends → "2,00 €".
+ */
+export function formatEuroRange(low: number, high: number): string {
+  const r = (v: number) => Math.max(0.5, Math.round(v * 2) / 2);
+  const a = r(low);
+  const b = Math.max(a, r(high));
+  const f = (v: number) => v.toFixed(2).replace(".", ",");
+  return a === b ? `${f(a)} €` : `${f(a)}–${f(b)} €`;
+}

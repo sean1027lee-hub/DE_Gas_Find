@@ -110,29 +110,59 @@ export function forecast(nowPrice: number, nowHour: number, curve: Curve, hours 
   });
 }
 
-export interface Advice {
-  phase: TimingPhase;
-  /** Lowest expected price before the next 12:00 raise, and when. */
-  best: HourPoint;
-  /** Expected change right after the next 12:00 (ct), when that is within the window. */
-  noonJumpCt: number | null;
-  /** ct you could save by waiting for `best` (≥ 0). */
-  waitSavingCt: number;
+/**
+ * ADAC analysis of ~14,000 stations, May 2026: average gap between a day's highest
+ * and lowest price. Used only as an upper bound for the 12:00 rise — we never show
+ * a precise per-hour price, because the curve above is a schematic, not measured data.
+ */
+export const DAILY_SPREAD_CT: Record<Fuel, number> = { e10: 14.6, e5: 14.6, diesel: 18.4 };
+
+/** The rule this feature rests on; set NEXT_PUBLIC_FUEL_TIMING=off to hide it if the rule changes. */
+export const RULE_SINCE = "2026-04-01";
+export const TIMING_ENABLED = process.env.NEXT_PUBLIC_FUEL_TIMING !== "off";
+
+/** Longest wait we suggest during the day (hours). */
+export const MAX_WAIT_HOURS = 8;
+
+export type Trend = "lower" | "same" | "higher";
+
+/** Direction of an expected change; within ±1 ct counts as "about the same". */
+export function trendOf(deltaCt: number): Trend {
+  if (deltaCt <= -1) return "lower";
+  if (deltaCt >= 1) return "higher";
+  return "same";
 }
 
-export function advise(nowPrice: number, nowHour: number, curve: Curve): Advice {
+export interface Advice {
+  phase: TimingPhase;
+  /** When it is typically cheapest before the next 12:00 raise. */
+  best: { hour: number; inHours: number };
+  /**
+   * Possible saving per litre (ct) by waiting until `best`, as a range [low, high];
+   * null when the expected difference is under 1 ct.
+   */
+  waitRangeCt: [number, number] | null;
+  /** Upper bound of the next 12:00 rise (ct/L), shown before noon. */
+  noonMaxCt: number | null;
+}
+
+export function advise(nowPrice: number, nowHour: number, curve: Curve, fuel: Fuel = "e10"): Advice {
   const points = forecast(nowPrice, nowHour, curve, 24);
+  const phase = phaseAt(Math.floor(nowHour));
   // Only look ahead until the next raise; after it the comparison is a new day.
+  // During the day, waiting is only practical for a few hours, so cap the window;
+  // at night "tomorrow morning" is the natural suggestion.
   const nextNoon = points.findIndex((p) => p.inHours > 0 && p.hour === RAISE_HOUR);
-  const window = nextNoon > 0 ? points.slice(0, nextNoon) : points;
+  const untilNoon = nextNoon > 0 ? points.slice(0, nextNoon) : points;
+  const window = phase === "night" ? untilNoon : untilNoon.slice(0, MAX_WAIT_HOURS + 1);
   const best = window.reduce((a, b) => (b.price < a.price ? b : a), window[0]);
-  const noon = nextNoon > 0 ? points[nextNoon] : null;
-  const beforeNoon = noon ? points[nextNoon - 1] : null;
+  const dropCt = (nowPrice - best.price) * 100;
   return {
-    phase: phaseAt(Math.floor(nowHour)),
-    best,
-    noonJumpCt: noon && beforeNoon ? Math.round((noon.price - beforeNoon.price) * 1000) / 10 : null,
-    waitSavingCt: Math.max(0, Math.round((nowPrice - best.price) * 1000) / 10),
+    phase,
+    best: { hour: best.hour, inHours: best.inHours },
+    // The schematic can over- or understate; show half to the full modelled drop.
+    waitRangeCt: dropCt >= 1 ? [Math.max(1, Math.round(dropCt * 0.5)), Math.max(1, Math.round(dropCt))] : null,
+    noonMaxCt: phase === "beforeNoon" || phase === "night" ? Math.round(DAILY_SPREAD_CT[fuel]) : null,
   };
 }
 
@@ -185,6 +215,34 @@ export function learnCurve(obs: Observation[], fuel: Fuel): { curve: Curve; days
     return r && r.length >= 2 ? median(r) : typicalOffsetCt(h + 0.5, fuel);
   });
   return { curve: (hour: number) => table[((Math.floor(hour) % 24) + 24) % 24], days };
+}
+
+/**
+ * How often the curve predicted the direction of real changes between two
+ * observations on the same "price day" (no 12:00 in between). Changes under
+ * 0.5 ct are ignored. Returns null with fewer than 8 usable pairs.
+ */
+export function directionHitRate(obs: Observation[], fuel: Fuel, curve: Curve): number | null {
+  const list = obs.filter((o) => o.fuel === fuel).sort((a, b) => a.t - b.t);
+  let hits = 0;
+  let total = 0;
+  for (let i = 1; i < list.length; i++) {
+    const a = list[i - 1];
+    const b = list[i];
+    if (a.cell !== b.cell || b.t - a.t > 12 * 3_600_000) continue;
+    const ca = berlinClock(new Date(a.t));
+    const cb = berlinClock(new Date(b.t));
+    const ha = ca.hour + ca.minute / 60;
+    const hb = cb.hour + cb.minute / 60;
+    const crossesNoon = ca.dateKey === cb.dateKey ? ha < RAISE_HOUR && hb >= RAISE_HOUR : hb >= RAISE_HOUR || ha < RAISE_HOUR;
+    if (crossesNoon) continue;
+    const actual = (b.price - a.price) * 100;
+    if (Math.abs(actual) < 0.5) continue;
+    const predicted = curve(hb) - curve(ha);
+    total++;
+    if (Math.sign(predicted) === Math.sign(actual)) hits++;
+  }
+  return total >= 8 ? Math.round((hits / total) * 100) : null;
 }
 
 /** Keep the last 14 days, at most one observation per fuel and cell every 20 minutes. */
