@@ -1,0 +1,284 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Design tokens.
+ * - One accent (signal blue) for interaction only.
+ * - Price tiers use their own semantic colours and are never used for interaction.
+ * - The "board" is the fuel price sign: dark plate, warm bright digits — in both themes.
+ * Contrast pairs are WCAG AA (≥ 4.5:1 for text) against their intended surface.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f2f3f5;
+  --surface: #ffffff;
+  --surface-2: #e9ebef;
+  --surface-3: #dfe2e7;
+  --line: #d9dde3;
+  --ink: #0e1217;
+  --ink-2: #4b5560;
+  --ink-3: #5f6873;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2eafc;
+  --accent-soft-ink: #163fae;
+  --board: #13171c;
+  --board-line: #2b323a;
+  --board-ink: #fff3d6;
+  --board-ink-2: #a6afb9;
+  --low: #0b7a3e;
+  --low-soft: #dff3e6;
+  --mid: #8a5a00;
+  --mid-soft: #f8edd5;
+  --high: #b3261e;
+  --high-soft: #fbe5e3;
+  --warn-soft: #fff4d6;
+  --warn-ink: #6b4a00;
+  --focus: #1d4ed8;
+  --scrim: rgb(8 10 14 / 0.45);
+  --shadow-sheet: 0 -8px 32px rgb(8 10 14 / 0.16);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0d11;
+  --surface: #141920;
+  --surface-2: #1c222a;
+  --surface-3: #262d36;
+  --line: #29313a;
+  --ink: #eef1f4;
+  --ink-2: #b1bac4;
+  --ink-3: #939da8;
+  --accent: #7aa5ff;
+  --accent-ink: #08101f;
+  --accent-soft: #1b2744;
+  --accent-soft-ink: #a9c4ff;
+  --board: #050709;
+  --board-line: #262d35;
+  --board-ink: #fff0c9;
+  --board-ink-2: #98a2ad;
+  --low: #5fd38f;
+  --low-soft: #12291c;
+  --mid: #e8b54d;
+  --mid-soft: #2b2312;
+  --high: #ff8577;
+  --high-soft: #34171a;
+  --warn-soft: #2b2312;
+  --warn-ink: #f1cd7e;
+  --focus: #7aa5ff;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-sheet: 0 -8px 32px rgb(0 0 0 / 0.5);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-ink: var(--accent-soft-ink);
+  --color-board: var(--board);
+  --color-board-line: var(--board-line);
+  --color-board-ink: var(--board-ink);
+  --color-board-ink-2: var(--board-ink-2);
+  --color-low: var(--low);
+  --color-low-soft: var(--low-soft);
+  --color-mid: var(--mid);
+  --color-mid-soft: var(--mid-soft);
+  --color-high: var(--high);
+  --color-high-soft: var(--high-soft);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-ink: var(--warn-ink);
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-card: 14px;
+  --radius-control: 10px;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss06";
+    overscroll-behavior-y: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    word-break: keep-all;
+  }
+
+  :focus-visible {
+    outline: 2.5px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+}
+
+@layer components {
+  /* Prices: monospaced tabular digits so columns line up. */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum", "zero" 0;
+    letter-spacing: -0.02em;
+  }
+
+  /* Sans digits that line up (distances, times). */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Monospace commas are as wide as digits; pull them in. */
+  .price-comma {
+    margin-inline: -0.16em -0.12em;
+  }
+
+  /* Pump-style superscript tenth of a cent. */
+  .price-sup {
+    font-size: 0.58em;
+    vertical-align: 0.62em;
+    line-height: 0;
+    margin-left: 0.04em;
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 50%, var(--surface-2) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: 6px;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet-in {
+  animation: sheet-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.animate-fade-in {
+  animation: fade-in 200ms ease-out;
+}
+.animate-spin-slow {
+  animation: spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* Map marker collapsed to a dot when its label would overlap a cheaper one. */
+.tp-dot {
+  width: 14px;
+  height: 14px;
+  padding: 0 !important;
+  font-size: 0 !important;
+  border-radius: 999px !important;
+  border: 2px solid var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3) !important;
+}
+.tp-dot[data-tier="low"] {
+  background: var(--low);
+}
+.tp-dot[data-tier="mid"] {
+  background: var(--mid);
+}
+.tp-dot[data-tier="high"] {
+  background: var(--high);
+}
+.tp-dot[data-tier="closed"] {
+  background: var(--ink-3);
+}
+/* Keep a comfortable tap target around the dot. */
+.tp-dot::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+/* MapLibre: keep controls on-brand and out of the safe areas. */
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent) !important;
+  color: var(--ink-2);
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--ink-2) !important;
+}
+[data-theme="dark"] .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
