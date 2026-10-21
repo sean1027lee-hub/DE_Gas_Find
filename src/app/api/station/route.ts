@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { TtlCache } from "@/lib/cache";
-import { mockDetail } from "@/lib/mock";
 import { backend, cacheHeaders, jsonError, noKeyError, upstreamError } from "@/lib/server";
 import { fetchDetail, isStationId } from "@/lib/tankerkoenig";
 import type { StationDetail } from "@/lib/types";
@@ -14,14 +13,12 @@ export async function GET(req: NextRequest) {
   const id = (req.nextUrl.searchParams.get("id") ?? "").trim().toLowerCase();
   if (!isStationId(id)) return jsonError("bad_request", "주유소 ID가 올바르지 않아요.", 400);
 
-  const b = backend();
-  if (b.source === "none") return noKeyError();
+  const b = backend(req);
+  if (!b) return noKeyError();
 
   try {
-    const detail = await cache.getOrLoad(`${b.source}:${id}`, async () =>
-      b.source === "live" ? fetchDetail(id, b.apiKey) : mockDetail(id),
-    );
-    return NextResponse.json(detail, { headers: cacheHeaders(TTL_SECONDS) });
+    const detail = await cache.getOrLoad(`${b.mode}:${b.variant}:${id}`, () => fetchDetail(id, b.transport));
+    return NextResponse.json(detail, { headers: cacheHeaders(TTL_SECONDS, b) });
   } catch (e) {
     return upstreamError(e);
   }

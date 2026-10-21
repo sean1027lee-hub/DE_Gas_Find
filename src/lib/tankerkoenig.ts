@@ -155,52 +155,66 @@ export function parseDetailResponse(json: unknown): StationDetail {
   return { id: s.id, openingTimes, overrides: s.overrides, wholeDay: s.wholeDay, isOpen: s.isOpen };
 }
 
-async function getJson(path: string, params: Record<string, string>, apiKey: string): Promise<unknown> {
-  const url = new URL(`${API_BASE}/${path}`);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  url.searchParams.set("apikey", apiKey);
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json", "User-Agent": "Tankpreis-PWA/0.1" },
-      cache: "no-store",
-    });
-  } catch {
-    // Never include the URL: it contains the API key.
-    throw new UpstreamError("Tankerkönig not reachable", 504);
-  }
-  if (!res.ok) throw new UpstreamError(`Tankerkönig HTTP ${res.status}`, res.status === 429 ? 429 : 502);
-  return res.json();
+/**
+ * Fetches one endpoint and returns the raw JSON. Live and mock mode differ only
+ * here — parsing, caching and error handling are shared.
+ */
+export type Transport = (path: "list.php" | "prices.php" | "detail.php", params: Record<string, string>) => Promise<unknown>;
+
+/** Live transport. Retries once on network errors and 5xx (not on 4xx/429). */
+export function liveTransport(apiKey: string): Transport {
+  return async (path, params) => {
+    const url = new URL(`${API_BASE}/${path}`);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    url.searchParams.set("apikey", apiKey);
+    for (let attempt = 1; ; attempt++) {
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+          headers: { Accept: "application/json", "User-Agent": "Tankpreis-PWA/0.1" },
+          cache: "no-store",
+        });
+      } catch {
+        // Never include the URL: it contains the API key.
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 400));
+          continue;
+        }
+        throw new UpstreamError("Tankerkönig not reachable", 504);
+      }
+      if (res.status >= 500 && attempt < 2) {
+        await new Promise((r) => setTimeout(r, 400));
+        continue;
+      }
+      if (!res.ok) throw new UpstreamError(`Tankerkönig HTTP ${res.status}`, res.status === 429 ? 429 : 502);
+      return res.json();
+    }
+  };
 }
 
-export async function fetchList(
-  lat: number,
-  lng: number,
-  radiusKm: number,
-  apiKey: string,
-): Promise<Station[]> {
-  const json = await getJson(
-    "list.php",
-    { lat: String(lat), lng: String(lng), rad: String(radiusKm), sort: "dist", type: "all" },
-    apiKey,
-  );
+export async function fetchList(lat: number, lng: number, radiusKm: number, transport: Transport): Promise<Station[]> {
+  const json = await transport("list.php", {
+    lat: String(lat),
+    lng: String(lng),
+    rad: String(radiusKm),
+    sort: "dist",
+    type: "all",
+  });
   return parseListResponse(json);
 }
 
 /** Upstream accepts at most 10 IDs per call. */
 export const PRICES_BATCH = 10;
 
-export async function fetchPrices(ids: string[], apiKey: string): Promise<Record<string, PriceUpdate>> {
+export async function fetchPrices(ids: string[], transport: Transport): Promise<Record<string, PriceUpdate>> {
   if (ids.length === 0) return {};
   if (ids.length > PRICES_BATCH) throw new Error(`fetchPrices: max ${PRICES_BATCH} ids`);
-  const json = await getJson("prices.php", { ids: ids.join(",") }, apiKey);
-  return parsePricesResponse(json);
+  return parsePricesResponse(await transport("prices.php", { ids: ids.join(",") }));
 }
 
-export async function fetchDetail(id: string, apiKey: string): Promise<StationDetail> {
-  const json = await getJson("detail.php", { id }, apiKey);
-  return parseDetailResponse(json);
+export async function fetchDetail(id: string, transport: Transport): Promise<StationDetail> {
+  return parseDetailResponse(await transport("detail.php", { id }));
 }
 
 /** Tankerkönig station IDs are UUIDs. */

@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { distanceKm, snapToGrid, type LatLng } from "@/lib/geo";
+import { apiQuery, ignoresCache, scenario } from "@/lib/scenario";
 import {
   lastResultStore,
   refreshFavoriteSnapshots,
@@ -35,9 +36,11 @@ const FRESH_MS = 5 * 60_000;
 /** Refetch when the origin moved further than this from the last request. */
 const REFETCH_DISTANCE_KM = 1;
 
-export const GPS_LABEL = "현재 위치";
+/** GPS origin without a place name yet; the UI shows "현재 위치" (translated). */
+export const GPS_LABEL = "";
 
 async function fetchJson<T>(url: string, timeoutMs = 10_000): Promise<T> {
+  if (scenario() === "offline") throw { code: "offline", message: "오프라인 상태예요." } satisfies FetchError;
   let res: Response;
   try {
     res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
@@ -70,6 +73,7 @@ async function reverseLabel(p: LatLng): Promise<string | null> {
 }
 
 function getPosition(): Promise<GeolocationPosition> {
+  if (scenario() === "denied") return Promise.reject({ code: 1, message: "scenario: denied" });
   return new Promise((resolve, reject) =>
     navigator.geolocation.getCurrentPosition(resolve, reject, {
       enableHighAccuracy: false,
@@ -89,7 +93,10 @@ async function permissionState(): Promise<PermissionState | "unknown"> {
 }
 
 export function useNearby(enabled: boolean) {
-  const last = lastResultStore.use();
+  const stored = lastResultStore.use();
+  // State previews (?scenario=loading|empty|error) start without cached data.
+  const [fetchedThisSession, setFetchedThisSession] = useState(false);
+  const last = ignoresCache() && !fetchedThisSession ? null : stored;
   const [origin, setOrigin] = useState<Origin | null>(null);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<LocError | null>(null);
@@ -101,7 +108,7 @@ export function useNearby(enabled: boolean) {
   const lastLocateAt = useRef(0);
 
   const load = useCallback(async (target: Place, force: boolean) => {
-    const current = lastResultStore.get();
+    const current = ignoresCache() ? null : lastResultStore.get();
     if (!force && current) {
       const age = Date.now() - new Date(current.response.fetchedAt).getTime();
       const moved = distanceKm(current.origin, target);
@@ -117,10 +124,11 @@ export function useNearby(enabled: boolean) {
     const g = snapToGrid(target);
     try {
       const response = await fetchJson<StationsResponse>(
-        `/api/stations?lat=${g.lat}&lng=${g.lng}&rad=${FETCH_RADIUS}`,
+        `/api/stations?lat=${g.lat}&lng=${g.lng}&rad=${FETCH_RADIUS}${apiQuery()}`,
       );
       if (id !== requestId.current) return;
       lastResultStore.set({ response, origin: { lat: target.lat, lng: target.lng, label: target.label } });
+      setFetchedThisSession(true);
       refreshFavoriteSnapshots(response.stations);
       setStatus("ready");
     } catch (e) {

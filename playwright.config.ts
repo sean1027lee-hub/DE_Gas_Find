@@ -22,6 +22,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
-    env: { TANKERKOENIG_MOCK: "1" },
+    env: { TANKERKOENIG_MODE: "mock" },
   },
 });

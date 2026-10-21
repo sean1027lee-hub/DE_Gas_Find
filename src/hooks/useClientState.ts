@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { scenario } from "@/lib/scenario";
 
 const noopSubscribe = () => () => {};
 
@@ -39,7 +40,7 @@ function subscribeOnline(cb: () => void) {
 export function useOnline(): boolean {
   return useSyncExternalStore(
     subscribeOnline,
-    () => navigator.onLine,
+    () => navigator.onLine && scenario() !== "offline",
     () => true,
   );
 }

@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { TtlCache } from "@/lib/cache";
 import { isInGermanyArea, isValidLatLng, snapToGrid } from "@/lib/geo";
-import { mockStations } from "@/lib/mock";
-import { backend, cacheHeaders, jsonError, noKeyError, parseNumber, sourceOf, upstreamError } from "@/lib/server";
+import { backend, cacheHeaders, jsonError, noKeyError, parseNumber, sleep, sourceOf, upstreamError } from "@/lib/server";
 import { fetchList } from "@/lib/tankerkoenig";
 import type { StationsResponse } from "@/lib/types";
 
@@ -25,20 +24,21 @@ export async function GET(req: NextRequest) {
   }
   if (!Number.isFinite(rad) || rad <= 0) return jsonError("bad_request", "반경 값이 올바르지 않아요.", 400);
 
-  const b = backend();
-  if (b.source === "none") return noKeyError();
+  const b = backend(req);
+  if (!b) return noKeyError();
+  if (b.delayMs) await sleep(b.delayMs);
 
   const grid = snapToGrid(point);
   const radius = Math.min(MAX_RADIUS, Math.ceil(rad));
-  const key = `${b.source}:${grid.lat.toFixed(2)},${grid.lng.toFixed(2)}:${radius}`;
+  const key = `${b.mode}:${b.variant}:${grid.lat.toFixed(2)},${grid.lng.toFixed(2)}:${radius}`;
 
   try {
     const data = await cache.getOrLoad(key, async () => ({
-      stations: b.source === "live" ? await fetchList(grid.lat, grid.lng, radius, b.apiKey) : mockStations(grid, radius),
+      stations: await fetchList(grid.lat, grid.lng, radius, b.transport),
       fetchedAt: new Date().toISOString(),
       source: sourceOf(b),
     }));
-    return NextResponse.json(data, { headers: cacheHeaders(TTL_SECONDS) });
+    return NextResponse.json(data, { headers: cacheHeaders(TTL_SECONDS, b) });
   } catch (e) {
     return upstreamError(e);
   }

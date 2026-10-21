@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { TtlCache } from "@/lib/cache";
-import { mockPrices } from "@/lib/mock";
-import { backend, cacheHeaders, jsonError, noKeyError, sourceOf, upstreamError } from "@/lib/server";
+import { backend, cacheHeaders, jsonError, noKeyError, sleep, sourceOf, upstreamError } from "@/lib/server";
 import { fetchPrices, isStationId, PRICES_BATCH } from "@/lib/tankerkoenig";
 import type { PricesResponse, PriceUpdate } from "@/lib/types";
 
@@ -17,16 +16,17 @@ export async function GET(req: NextRequest) {
     return jsonError("bad_request", "주유소 ID가 올바르지 않아요.", 400);
   }
 
-  const b = backend();
-  if (b.source === "none") return noKeyError();
+  const b = backend(req);
+  if (!b) return noKeyError();
+  if (b.delayMs) await sleep(b.delayMs);
 
   try {
     const batches: string[][] = [];
     for (let i = 0; i < ids.length; i += PRICES_BATCH) batches.push(ids.slice(i, i + PRICES_BATCH));
     const results = await Promise.all(
       batches.map((batch) =>
-        cache.getOrLoad(`${b.source}:${batch.join(",")}`, async () => ({
-          prices: b.source === "live" ? await fetchPrices(batch, b.apiKey) : mockPrices(batch),
+        cache.getOrLoad(`${b.mode}:${b.variant}:${batch.join(",")}`, async () => ({
+          prices: await fetchPrices(batch, b.transport),
           fetchedAt: new Date().toISOString(),
         })),
       ),
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       fetchedAt: results.map((r) => r.fetchedAt).sort()[0],
       source: sourceOf(b),
     };
-    return NextResponse.json(body, { headers: cacheHeaders(TTL_SECONDS) });
+    return NextResponse.json(body, { headers: cacheHeaders(TTL_SECONDS, b) });
   } catch (e) {
     return upstreamError(e);
   }
