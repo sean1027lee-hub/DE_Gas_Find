@@ -1,23 +1,24 @@
 name: Update fuel price benchmarks
 
+# Refreshes src/data/benchmarks.json from the EU Weekly Oil Bulletin.
+# A commit by this workflow triggers a normal Vercel redeploy.
 on:
   workflow_dispatch:
-    inputs:
-      inspect:
-        description: "Only print the workbook structure"
-        type: boolean
-        default: false
   push:
     branches: [master]
     paths:
       - scripts/update-benchmarks.mjs
       - .github/workflows/update-benchmarks.yml
   schedule:
-    # Tuesdays 09:17 UTC — the Oil Bulletin is usually published on Monday/Tuesday.
-    - cron: "17 9 * * 2"
+    # Tuesdays and Thursdays 09:17 UTC — the bulletin is usually published early in the week.
+    - cron: "17 9 * * 2,4"
 
 permissions:
   contents: write
+
+concurrency:
+  group: update-benchmarks
+  cancel-in-progress: false
 
 jobs:
   update:
@@ -29,6 +30,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Inspect workbook
-        if: ${{ inputs.inspect || github.event_name == 'push' }}
-        run: node scripts/update-benchmarks.mjs --inspect
+      - run: node scripts/update-benchmarks.mjs
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- src/data/benchmarks.json && git ls-files --error-unmatch src/data/benchmarks.json >/dev/null 2>&1; then
+            echo "No change"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/data/benchmarks.json
+          git commit -m "Update fuel price benchmarks (EU Weekly Oil Bulletin)"
+          git pull --rebase origin master
+          git push origin HEAD:master
