@@ -1,0 +1,29 @@
+name: Update fuel price benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      inspect:
+        description: "Only print the workbook structure"
+        type: boolean
+        default: false
+  schedule:
+    # Tuesdays 09:17 UTC — the Oil Bulletin is usually published on Monday/Tuesday.
+    - cron: "17 9 * * 2"
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Inspect workbook
+        if: ${{ inputs.inspect }}
+        run: node scripts/update-benchmarks.mjs --inspect
