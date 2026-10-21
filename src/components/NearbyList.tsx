@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { useT } from "@/i18n";
 import type { RankResult, SortMode } from "@/lib/pricing";
 import { updateSettings, type Radius } from "@/lib/store";
 import { FUEL_LABELS, type Fuel, type Station } from "@/lib/types";
@@ -8,7 +9,7 @@ import { ChevronDownIcon, StarIcon } from "./icons";
 import { Segmented } from "./Segmented";
 import { RowSkeleton, StatusMessage } from "./StatusMessage";
 import { StationRow } from "./StationRow";
-import { SummaryCard, SummarySkeleton } from "./SummaryCard";
+import { SummarySkeleton } from "./SummaryCard";
 
 interface NearbyListProps {
   result: RankResult | null;
@@ -16,26 +17,27 @@ interface NearbyListProps {
   fuel: Fuel;
   radiusKm: Radius;
   sort: SortMode;
-  litres: number;
-  stale: boolean;
   favoriteIds: Set<string>;
   onSelect: (station: Station) => void;
-  /** Market context rendered under the summary card. */
-  insight?: React.ReactNode;
+  /** Hero card, timing and market context, rendered above the list. */
+  top?: ReactNode;
 }
 
 const NEXT_RADIUS: Record<Radius, Radius | null> = { 2: 5, 5: 10, 10: 25, 25: null };
 
-export function NearbyList({ result, loading, fuel, radiusKm, sort, litres, stale, favoriteIds, onSelect, insight }: NearbyListProps) {
+const LIST = "mx-4 mt-2 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] bg-surface";
+
+export function NearbyList({ result, loading, fuel, radiusKm, sort, favoriteIds, onSelect, top }: NearbyListProps) {
+  const { t } = useT();
   const [showClosed, setShowClosed] = useState(false);
 
   if (!result) {
     return (
-      <div aria-busy="true" aria-label="가격 불러오는 중">
+      <div aria-busy="true" aria-label={t("list.loading")}>
         <div className="px-4">
           <SummarySkeleton />
         </div>
-        <ul className="mt-4">
+        <ul className={`${LIST} mt-4`}>
           {Array.from({ length: 6 }, (_, i) => (
             <RowSkeleton key={i} />
           ))}
@@ -44,39 +46,43 @@ export function NearbyList({ result, loading, fuel, radiusKm, sort, litres, stal
     );
   }
 
-  const { open, closed, cheapest, average, withoutPrice } = result;
+  const { open, closed, withoutPrice } = result;
   const nextRadius = NEXT_RADIUS[radiusKm];
+  const row = (item: RankResult["open"][number], favorite = favoriteIds.has(item.station.id)) => (
+    <StationRow key={item.station.id} item={item} fuel={fuel} favorite={favorite} onSelect={() => onSelect(item.station)} />
+  );
+  const closedSection = closed.length > 0 && (
+    <section className="mt-4">
+      <button
+        type="button"
+        onClick={() => setShowClosed((v) => !v)}
+        aria-expanded={showClosed}
+        className="mx-4 flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink-2"
+      >
+        {t(showClosed ? "list.closedHide" : "list.closedShow", { n: closed.length })}
+        <ChevronDownIcon size={16} className={showClosed ? "rotate-180" : ""} />
+      </button>
+      {showClosed && <ul className={`${LIST} mt-1`}>{closed.map((item) => row(item))}</ul>}
+    </section>
+  );
 
   if (open.length === 0) {
-    const hasClosed = closed.length > 0;
     return (
       <>
         <StatusMessage
           title={
-            hasClosed
-              ? `지금 ${radiusKm} km 안에 영업 중인 주유소가 없어요`
-              : `${radiusKm} km 안에 ${FUEL_LABELS[fuel]} 가격이 있는 주유소가 없어요`
+            closed.length > 0
+              ? t("empty.noneOpen", { radius: radiusKm })
+              : t("empty.noPrice", { radius: radiusKm, fuel: FUEL_LABELS[fuel] })
           }
-          description={
-            nextRadius
-              ? `반경을 ${nextRadius} km로 넓혀 보세요.`
-              : "다른 위치를 선택하거나 잠시 후 다시 확인해 보세요."
-          }
+          description={nextRadius ? t("empty.widen", { next: nextRadius }) : t("empty.elsewhere")}
           actions={
             nextRadius && (
-              <Button onClick={() => updateSettings({ radiusKm: nextRadius })}>{nextRadius} km로 넓히기</Button>
+              <Button onClick={() => updateSettings({ radiusKm: nextRadius })}>{t("empty.widenBtn", { next: nextRadius })}</Button>
             )
           }
         />
-        {hasClosed && (
-          <ClosedSection
-            items={closed}
-            open={showClosed}
-            onToggle={() => setShowClosed((v) => !v)}
-            favoriteIds={favoriteIds}
-            onSelect={onSelect}
-          />
-        )}
+        {closedSection}
       </>
     );
   }
@@ -85,119 +91,44 @@ export function NearbyList({ result, loading, fuel, radiusKm, sort, litres, stal
 
   return (
     <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"}>
-      {cheapest && (
-        <div className="px-4">
-          <SummaryCard
-            cheapest={cheapest}
-            average={average}
-            count={open.length}
-            fuel={fuel}
-            radiusKm={radiusKm}
-            litres={litres}
-            stale={stale}
-            onSelect={() => onSelect(cheapest.station)}
-          />
-          {insight}
-        </div>
-      )}
+      {top && <div className="px-4">{top}</div>}
 
       {pinned.length > 0 && (
         <section aria-labelledby="pinned-heading" className="mt-5">
-          <h2 id="pinned-heading" className="flex items-center gap-1.5 px-4 text-[14px] font-semibold text-ink-2">
-            <StarIcon size={15} filled /> 즐겨찾기
+          <h2 id="pinned-heading" className="flex items-center gap-1.5 px-4 text-sm font-semibold text-ink-2">
+            <StarIcon size={15} filled /> {t("tab.favorites")}
           </h2>
-          <ul className="mx-4 mt-2 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] bg-surface">
-            {pinned.map((item) => (
-              <StationRow key={item.station.id} item={item} favorite onSelect={() => onSelect(item.station)} />
-            ))}
-          </ul>
+          <ul className={LIST}>{pinned.map((item) => row(item, true))}</ul>
         </section>
       )}
 
       <section aria-labelledby="list-heading" className="mt-5">
-        <div className="flex items-center justify-between gap-3 px-4">
-          <h2 id="list-heading" className="text-[14px] font-semibold text-ink-2">
-            영업 중 <span className="tnum">{open.length}</span>곳
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4">
+          <h2 id="list-heading" className="text-sm font-semibold text-ink-2">
+            {t("list.openCount", { n: open.length })}
           </h2>
           <Segmented<SortMode>
-            label="정렬"
+            label={t("list.sort")}
             size="sm"
             value={sort}
             onChange={(v) => updateSettings({ sort: v })}
             options={[
-              { value: "price", label: "가격순" },
-              { value: "distance", label: "거리순" },
+              { value: "price", label: t("list.byPrice") },
+              { value: "distance", label: t("list.byDistance") },
             ]}
-            className="w-[156px] text-[14px]"
+            className="min-w-[10rem] text-sm"
           />
         </div>
-        <ul className="mx-4 mt-2 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] bg-surface" aria-labelledby="list-heading">
-          {open.map((item) => (
-            <StationRow
-              key={item.station.id}
-              item={item}
-              favorite={favoriteIds.has(item.station.id)}
-              onSelect={() => onSelect(item.station)}
-            />
-          ))}
+        <ul className={LIST} aria-labelledby="list-heading">
+          {open.map((item) => row(item))}
         </ul>
       </section>
 
-      {closed.length > 0 && (
-        <ClosedSection
-          items={closed}
-          open={showClosed}
-          onToggle={() => setShowClosed((v) => !v)}
-          favoriteIds={favoriteIds}
-          onSelect={onSelect}
-        />
-      )}
+      {closedSection}
 
       {withoutPrice > 0 && (
-        <p className="mt-4 px-4 text-[13px] text-ink-3">
-          {FUEL_LABELS[fuel]} 가격이 없는 주유소 {withoutPrice}곳은 목록에서 뺐어요.
-        </p>
+        <p className="mt-4 px-4 text-meta text-ink-3">{t("list.withoutPrice", { fuel: FUEL_LABELS[fuel], n: withoutPrice })}</p>
       )}
     </div>
-  );
-}
-
-function ClosedSection({
-  items,
-  open,
-  onToggle,
-  favoriteIds,
-  onSelect,
-}: {
-  items: RankResult["closed"];
-  open: boolean;
-  onToggle: () => void;
-  favoriteIds: Set<string>;
-  onSelect: (s: Station) => void;
-}) {
-  return (
-    <section className="mt-4">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="mx-4 flex min-h-11 items-center gap-1.5 text-[14px] font-semibold text-ink-2"
-      >
-        영업 종료 {items.length}곳 {open ? "접기" : "보기"}
-        <ChevronDownIcon size={16} className={open ? "rotate-180" : ""} />
-      </button>
-      {open && (
-        <ul className="mx-4 mt-1 divide-y divide-line overflow-hidden rounded-[var(--radius-card)] bg-surface">
-          {items.map((item) => (
-            <StationRow
-              key={item.station.id}
-              item={item}
-              favorite={favoriteIds.has(item.station.id)}
-              onSelect={() => onSelect(item.station)}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }

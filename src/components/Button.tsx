@@ -9,7 +9,7 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 const BASE =
-  "inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] px-4 text-[16px] font-semibold transition-[opacity,background-color] disabled:opacity-50";
+  "inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-control)] px-4 text-base font-semibold transition-[opacity,background-color] disabled:opacity-50";
 
 export function Button({
   variant = "primary",

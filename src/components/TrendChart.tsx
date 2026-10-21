@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Point } from "@/lib/benchmarks";
+import { useT } from "@/i18n";
 import { formatIsoDate, formatLitrePrice } from "@/lib/format";
 
 interface TrendChartProps {
@@ -25,6 +26,7 @@ function niceStep(range: number): number {
 }
 
 export function TrendChart({ points, average, label }: TrendChartProps) {
+  const { t, lang } = useT();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(340);
   const [active, setActive] = useState<number | null>(null);
@@ -71,12 +73,16 @@ export function TrendChart({ points, average, label }: TrendChartProps) {
           const iso = `${yr}-${String(m).padStart(2, "0")}-01`;
           const t = new Date(iso).getTime();
           if (t <= t0 || t >= t1) continue;
-          xTicks.push({ x: x(iso), label: m === 1 ? `${yr}` : `${m}월` });
+          const month = new Intl.DateTimeFormat(lang === "ko" ? "ko-KR" : lang === "de" ? "de-DE" : "en-GB", {
+            month: "short",
+            timeZone: "UTC",
+          }).format(new Date(`${iso}T12:00:00Z`));
+          xTicks.push({ x: x(iso), label: m === 1 ? `${yr}` : month });
         }
       }
     }
     return { x, y, path, yTicks, xTicks, innerW };
-  }, [points, average, width]);
+  }, [points, average, width, lang]);
 
   const indexAt = (clientX: number) => {
     const rect = wrapRef.current!.getBoundingClientRect();
@@ -103,7 +109,7 @@ export function TrendChart({ points, average, label }: TrendChartProps) {
       className="relative touch-pan-y select-none outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:rounded-lg"
       tabIndex={0}
       role="group"
-      aria-label={`${label}. 좌우 방향키로 주별 가격을 확인할 수 있어요.`}
+      aria-label={`${label}. ${t("chart.keysHint")}`}
       onPointerMove={(e) => setActive(indexAt(e.clientX))}
       onPointerDown={(e) => setActive(indexAt(e.clientX))}
       onPointerLeave={() => setActive(null)}
@@ -171,12 +177,12 @@ export function TrendChart({ points, average, label }: TrendChartProps) {
           className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-[8px] bg-surface px-2.5 py-1.5 text-center shadow-[0_2px_10px_rgb(0_0_0/0.18)] ring-1 ring-line"
           style={{ left: tipLeft }}
         >
-          <div className="tnum text-[15px] font-bold">{formatLitrePrice(activePoint.price)}</div>
-          <div className="tnum text-[12px] text-ink-2">{formatIsoDate(activePoint.date)} 주</div>
+          <div className="tnum text-ui font-bold">{formatLitrePrice(activePoint.price)}</div>
+          <div className="tnum text-xs text-ink-2">{t("chart.week", { date: formatIsoDate(activePoint.date) })}</div>
         </div>
       )}
       <p className="sr-only" aria-live="polite">
-        {activePoint ? `${formatIsoDate(activePoint.date)} 주, 리터당 ${formatLitrePrice(activePoint.price)}` : ""}
+        {activePoint ? t("chart.weekSr", { date: formatIsoDate(activePoint.date), price: formatLitrePrice(activePoint.price) }) : ""}
       </p>
     </div>
   );

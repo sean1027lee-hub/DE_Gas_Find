@@ -5,7 +5,7 @@ type Tone = "warn" | "info";
 export function Banner({ tone = "info", children, action }: { tone?: Tone; children: ReactNode; action?: ReactNode }) {
   const toneClass = tone === "warn" ? "bg-warn-soft text-warn-ink" : "bg-surface-2 text-ink-2";
   return (
-    <div className={`flex min-h-11 items-center gap-3 rounded-[12px] px-3.5 py-2 text-[14px] ${toneClass}`} role="status">
+    <div className={`flex min-h-11 items-center gap-3 rounded-[12px] px-3.5 py-2 text-sm ${toneClass}`} role="status">
       <div className="min-w-0 flex-1 leading-snug">{children}</div>
       {action}
     </div>

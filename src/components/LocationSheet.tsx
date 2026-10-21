@@ -1,9 +1,10 @@
 "use client";
+import { useT } from "@/i18n";
 import type { LocError } from "@/hooks/useNearby";
 import type { Place } from "@/lib/store";
 import { BottomSheet } from "./BottomSheet";
 import { HomeIcon, LocateIcon } from "./icons";
-import { DeniedHelp, LOC_ERROR_TEXT } from "./LocationHelp";
+import { DeniedHelp, LOC_ERROR_KEY } from "./LocationHelp";
 import { PlaceSearch } from "./PlaceSearch";
 
 interface LocationSheetProps {
@@ -40,20 +41,23 @@ function OptionButton({
       <span className="grid size-10 shrink-0 place-items-center rounded-full bg-surface text-accent">{icon}</span>
       <span className="min-w-0">
         <span className="block font-semibold">{title}</span>
-        <span className="block truncate text-[13px] text-ink-2">{description}</span>
+        <span className="block truncate text-meta text-ink-2" lang="de">
+          {description}
+        </span>
       </span>
     </button>
   );
 }
 
 export function LocationSheet({ open, onClose, home, locating, locError, onLocate, onHome, onPlace }: LocationSheetProps) {
+  const { t } = useT();
   return (
-    <BottomSheet open={open} onClose={onClose} title="어디 기준으로 볼까요?">
+    <BottomSheet open={open} onClose={onClose} title={t("locsheet.title")}>
       <div className="space-y-2">
         <OptionButton
           icon={<LocateIcon size={20} className={locating ? "animate-spin-slow" : ""} />}
-          title={locating ? "위치 찾는 중…" : "현재 위치"}
-          description="지금 있는 곳 주변 주유소"
+          title={locating ? t("header.locating") : t("loc.current")}
+          description={t("locsheet.currentDesc")}
           busy={locating}
           onClick={async () => {
             if (await onLocate()) onClose();
@@ -61,19 +65,13 @@ export function LocationSheet({ open, onClose, home, locating, locError, onLocat
         />
         {locError && (
           <div className="rounded-[12px] bg-warn-soft px-4 py-3 text-warn-ink" role="alert">
-            <p className="text-[14px] font-semibold">{LOC_ERROR_TEXT[locError]}</p>
-            {locError === "denied" ? (
-              <div className="mt-1 [&_p]:text-warn-ink [&_strong]:text-warn-ink">
-                <DeniedHelp />
-              </div>
-            ) : (
-              <p className="mt-1 text-[13px]">집 위치나 우편번호로도 볼 수 있어요.</p>
-            )}
+            <p className="text-sm font-semibold">{t(LOC_ERROR_KEY[locError])}</p>
+            {locError === "denied" ? <DeniedHelp /> : <p className="mt-1 text-meta">{t("locsheet.fallbackHint")}</p>}
           </div>
         )}
         <OptionButton
           icon={<HomeIcon size={20} />}
-          title="집"
+          title={t("locsheet.home")}
           description={home.label}
           onClick={() => {
             onHome();
@@ -81,7 +79,7 @@ export function LocationSheet({ open, onClose, home, locating, locError, onLocat
           }}
         />
       </div>
-      <h3 className="mt-6 mb-2 text-[14px] font-semibold text-ink-2">다른 곳 찾기</h3>
+      <h3 className="mt-6 mb-2 text-sm font-semibold text-ink-2">{t("locsheet.other")}</h3>
       <PlaceSearch
         onPick={(p) => {
           onPlace(p);

@@ -3,42 +3,49 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useBenchmarks } from "@/hooks/useBenchmarks";
 import { useHydrated, useMediaQuery, useNow, useOnline } from "@/hooks/useClientState";
-import { GPS_LABEL, useNearby } from "@/hooks/useNearby";
+import { useNearby } from "@/hooks/useNearby";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { SsrLangContext, useT, type Lang, type MessageKey } from "@/i18n";
 import { benchmarkFuel, type BenchmarkFuel } from "@/lib/benchmarks";
 import { formatClock } from "@/lib/format";
+import { snapToGrid } from "@/lib/geo";
 import { rankStations } from "@/lib/pricing";
-import { favoritesStore, settingsStore, toggleFavorite, updateSettings } from "@/lib/store";
-import type { Station } from "@/lib/types";
+import { scenario, scenarioClock } from "@/lib/scenario";
+import { favoritesStore, observationsStore, settingsStore, toggleFavorite, updateSettings } from "@/lib/store";
+import { addObservation, berlinClock, learnCurve, typicalOffsetCt } from "@/lib/timing";
+import { FUEL_LABELS, FUELS, type Station } from "@/lib/types";
 import { Attribution } from "./Attribution";
 import { Banner, BannerAction } from "./Banner";
 import { Button } from "./Button";
 import { ControlDock } from "./ControlDock";
 import { FavoritesView } from "./FavoritesView";
 import { Header } from "./Header";
+import { RefreshIcon } from "./icons";
 import { LocationSheet } from "./LocationSheet";
 import { MarketInsight } from "./MarketInsight";
 import { NearbyList } from "./NearbyList";
 import { Onboarding } from "./Onboarding";
-import { RefreshIcon } from "./icons";
 import { SettingsView } from "./SettingsView";
 import { StationSheet } from "./StationSheet";
 import { RowSkeleton, StatusMessage } from "./StatusMessage";
-import { SummarySkeleton } from "./SummaryCard";
+import { HeroCard, SummarySkeleton } from "./SummaryCard";
 import { TabBar, type Tab } from "./TabBar";
+import { TimingCard, TimingSheet, type TimingModel } from "./Timing";
 
 const CompareView = dynamic(() => import("./CompareView").then((m) => m.CompareView), {
   ssr: false,
-  loading: () => <div className="skeleton mx-4 h-64" aria-label="비교 데이터 불러오는 중" />,
+  loading: () => <div className="skeleton mx-4 h-64" />,
 });
 
 const MapView = dynamic(() => import("./MapView"), {
   ssr: false,
-  loading: () => <div className="skeleton h-full w-full rounded-none" aria-label="지도 불러오는 중" />,
+  loading: () => <div className="skeleton h-full w-full rounded-none" />,
 });
 
 /** Prices older than this are dimmed and the refresh control is highlighted. */
 const STALE_MS = 10 * 60_000;
+/** Radius used to record "cheapest nearby" observations for the timing forecast. */
+const OBSERVE_RADIUS_KM = 5;
 
 function useTheme(theme: "system" | "light" | "dark") {
   const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
@@ -66,17 +73,35 @@ function useMeasuredVar(name: string) {
   return ref;
 }
 
-export function App() {
+const cellOf = (p: { lat: number; lng: number }) => {
+  const g = snapToGrid(p);
+  return `${g.lat.toFixed(2)},${g.lng.toFixed(2)}`;
+};
+
+/** Entry point: provides the language the server rendered with (see proxy.ts). */
+export function App({ ssrLang }: { ssrLang: Lang }) {
+  return (
+    <SsrLangContext.Provider value={ssrLang}>
+      <AppInner />
+    </SsrLangContext.Provider>
+  );
+}
+
+function AppInner() {
+  const { t } = useT();
   const hydrated = useHydrated();
   const settings = settingsStore.use();
   const favorites = favoritesStore.use();
+  const observations = observationsStore.use();
   const dark = useTheme(settings.theme);
   const online = useOnline();
   const now = useNow();
+  const desktop = useMediaQuery("(min-width: 1024px)");
   const nearby = useNearby(hydrated && settings.onboarded);
   const [tab, setTab] = useState<Tab>("nearby");
   const [selected, setSelected] = useState<{ station: Station; fetchedAt: string | null } | null>(null);
   const [locationOpen, setLocationOpen] = useState(false);
+  const [timingOpen, setTimingOpen] = useState(false);
   const benchmarks = useBenchmarks();
   const [compareFuel, setCompareFuel] = useState<BenchmarkFuel | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -97,6 +122,38 @@ export function App() {
     });
   }, [data, effectiveOrigin, settings.fuel, settings.radiusKm, settings.sort]);
 
+  // Remember the cheapest nearby price per fuel (live data only) to learn the local daily pattern.
+  useEffect(() => {
+    if (!data || data.source !== "live" || scenario() || !effectiveOrigin) return;
+    const cell = cellOf(effectiveOrigin);
+    const time = Date.parse(data.fetchedAt);
+    for (const fuel of FUELS) {
+      const r = rankStations(data.stations, { fuel, origin: effectiveOrigin, radiusKm: OBSERVE_RADIUS_KM, sort: "price" });
+      if (r.cheapest) {
+        const price = r.cheapest.price;
+        observationsStore.set((list) => addObservation(list, { t: time, fuel, price, cell }));
+      }
+    }
+  }, [data, effectiveOrigin]);
+
+  const timing: TimingModel | null = useMemo(() => {
+    if (!result?.cheapest || !effectiveOrigin) return null;
+    const override = scenarioClock();
+    const clock = override
+      ? { hour: Number(override.split(":")[0]), minute: Number(override.split(":")[1]) }
+      : berlinClock(now);
+    const cell = cellOf(effectiveOrigin);
+    const learned =
+      data?.source === "live" ? learnCurve(observations.filter((o) => o.cell === cell), settings.fuel) : null;
+    const fuel = settings.fuel;
+    return {
+      nowPrice: result.cheapest.price,
+      nowHour: clock.hour + clock.minute / 60,
+      curve: learned?.curve ?? ((h: number) => typicalOffsetCt(h, fuel)),
+      learnedDays: learned?.days ?? null,
+    };
+  }, [result, effectiveOrigin, now, observations, data, settings.fuel]);
+
   const fetchedAt = data ? new Date(data.fetchedAt) : null;
   const stale = !!fetchedAt && now.getTime() - fetchedAt.getTime() > STALE_MS;
   const busy = nearby.status === "loading" || nearby.status === "refreshing";
@@ -104,10 +161,10 @@ export function App() {
   const { refresh } = nearby;
   const doRefresh = useCallback(async () => {
     await refresh();
-    setAnnouncement(`가격을 새로 불러왔어요 · ${formatClock(new Date())}`);
-  }, [refresh]);
+    setAnnouncement(t("announce.refreshed", { time: formatClock(new Date()) }));
+  }, [refresh, t]);
 
-  const pull = usePullToRefresh(mainRef, doRefresh, tab === "nearby" && settings.view === "list");
+  const pull = usePullToRefresh(mainRef, doRefresh, !desktop && tab === "nearby" && settings.view === "list");
 
   const openStation = useCallback(
     (station: Station, at: string | null = data?.fetchedAt ?? null) => setSelected({ station, fetchedAt: at }),
@@ -160,39 +217,82 @@ export function App() {
   }
 
   const origin = nearby.origin;
-  const locationLabel =
-    origin?.mode === "gps" && origin.label !== GPS_LABEL
-      ? `${origin.label} 근처`
-      : (origin?.label ?? nearby.dataOrigin?.label ?? "위치 선택");
-  const isMap = tab === "nearby" && settings.view === "map";
+  // "" (or a label stored by older versions) means a GPS fix without a place name yet.
+  const gpsUnnamed = origin?.mode === "gps" && (!origin.label || origin.label === "현재 위치");
+  const locationLabel = gpsUnnamed
+    ? t("loc.current")
+    : origin?.mode === "gps"
+      ? t("header.near", { place: origin.label })
+      : (origin?.label ?? nearby.dataOrigin?.label ?? t("header.pickLocation"));
+  const split = desktop && tab === "nearby";
+  const isMap = !split && tab === "nearby" && settings.view === "map";
   const offline = !online;
+  const errorText = nearby.error ? t(`error.code.${nearby.error.code}` as MessageKey) : "";
 
   const banners = (
     <div className="space-y-2 px-4 empty:hidden [&:not(:empty)]:mb-3">
       {data?.source === "mock" && (
         <Banner tone="warn">
-          <strong className="font-semibold">샘플 데이터</strong> · 실제 가격이 아니에요. 서버에 API 키를 설정하세요.
+          <strong className="font-semibold">{t("banner.mock")}</strong>
         </Banner>
       )}
-      {offline && data && (
-        <Banner tone="warn">오프라인이에요. {fetchedAt && formatClock(fetchedAt)} 기준 마지막 가격을 보여드려요.</Banner>
-      )}
+      {offline && data && fetchedAt && <Banner tone="warn">{t("banner.offline", { time: formatClock(fetchedAt) })}</Banner>}
       {!offline && nearby.status === "error" && data && (
-        <Banner tone="warn" action={<BannerAction onClick={doRefresh}>다시 시도</BannerAction>}>
-          {nearby.error?.message} 마지막 가격을 보여드려요.
+        <Banner tone="warn" action={<BannerAction onClick={doRefresh}>{t("common.retry")}</BannerAction>}>
+          {t("banner.refreshFailed", { reason: errorText })}
         </Banner>
       )}
       {nearby.locError === "denied" && origin?.mode !== "place" && (
-        <Banner action={<BannerAction onClick={() => setLocationOpen(true)}>변경</BannerAction>}>
-          위치 권한이 꺼져 있어 {origin?.label ?? settings.home.label} 기준으로 보여드려요.
+        <Banner action={<BannerAction onClick={() => setLocationOpen(true)}>{t("common.change")}</BannerAction>}>
+          {t("banner.denied", { place: origin?.label || settings.home.label })}
         </Banner>
       )}
       {!nearby.locError && nearby.stalePosition && !nearby.locating && (
-        <Banner action={<BannerAction onClick={() => void nearby.locate()}>현재 위치</BannerAction>}>
-          마지막으로 본 위치 기준이에요.
+        <Banner action={<BannerAction onClick={() => void nearby.locate()}>{t("loc.current")}</BannerAction>}>
+          {t("banner.stalePos")}
         </Banner>
       )}
     </div>
+  );
+
+  const mapView = (
+    <MapView
+      result={result}
+      origin={effectiveOrigin}
+      radiusKm={settings.radiusKm}
+      dark={dark}
+      navApp={settings.navApp}
+      onSelect={(s) => openStation(s)}
+      onShowList={() => updateSettings({ view: "list" })}
+    />
+  );
+
+  const listTop = result?.cheapest && (
+    <>
+      <HeroCard
+        cheapest={result.cheapest}
+        average={result.average}
+        count={result.open.length}
+        fuel={settings.fuel}
+        radiusKm={settings.radiusKm}
+        litres={settings.litres}
+        stale={stale}
+        navApp={settings.navApp}
+        onSelect={() => openStation(result.cheapest!.station)}
+      />
+      {timing && <TimingCard model={timing} onOpen={() => setTimingOpen(true)} />}
+      {benchmarks && (
+        <MarketInsight
+          data={benchmarks}
+          fuel={settings.fuel}
+          localCheapest={result.cheapest.price}
+          onOpen={() => {
+            setCompareFuel(null);
+            setTab("compare");
+          }}
+        />
+      )}
+    </>
   );
 
   let content: React.ReactNode;
@@ -206,40 +306,21 @@ export function App() {
       />
     );
   } else if (tab === "favorites") {
-    content = (
-      <FavoritesView
-        fuel={settings.fuel}
-        origin={effectiveOrigin}
-        now={now}
-        onSelect={(s, at) => openStation(s, at)}
-      />
-    );
+    content = <FavoritesView fuel={settings.fuel} origin={effectiveOrigin} now={now} onSelect={(s, at) => openStation(s, at)} />;
   } else if (tab === "settings") {
     content = <SettingsView settings={settings} currentPosition={origin?.mode === "gps" ? origin : null} />;
   } else if (!data && nearby.status === "error") {
+    const isOffline = nearby.error?.code === "offline";
     content = (
       <StatusMessage
         icon={<RefreshIcon size={22} />}
-        title={nearby.error?.code === "offline" ? "오프라인이에요" : "가격을 불러오지 못했어요"}
-        description={
-          nearby.error?.code === "offline"
-            ? "인터넷에 연결되면 자동으로 다시 불러올게요."
-            : `${nearby.error?.message ?? ""} 잠시 후 다시 시도해 주세요.`
-        }
-        actions={<Button onClick={doRefresh}>다시 시도</Button>}
+        title={t(isOffline ? "error.offlineTitle" : "error.title")}
+        description={isOffline ? t("error.offlineDesc") : `${errorText} ${t("error.later")}`}
+        actions={<Button onClick={doRefresh}>{t("common.retry")}</Button>}
       />
     );
   } else if (isMap) {
-    content = (
-      <MapView
-        result={result}
-        origin={effectiveOrigin}
-        radiusKm={settings.radiusKm}
-        dark={dark}
-        onSelect={(s) => openStation(s)}
-        onShowList={() => updateSettings({ view: "list" })}
-      />
-    );
+    content = mapView;
   } else {
     content = (
       <NearbyList
@@ -248,49 +329,37 @@ export function App() {
         fuel={settings.fuel}
         radiusKm={settings.radiusKm}
         sort={settings.sort}
-        litres={settings.litres}
-        stale={stale}
         favoriteIds={favoriteIds}
         onSelect={(s) => openStation(s)}
-        insight={
-          benchmarks && (
-            <MarketInsight
-              data={benchmarks}
-              fuel={settings.fuel}
-              localCheapest={result?.cheapest?.price ?? null}
-              onOpen={() => {
-                setCompareFuel(null);
-                setTab("compare");
-              }}
-            />
-          )
-        }
+        top={listTop}
       />
     );
   }
 
-  const tabTitle =
-    tab === "compare" ? "가격 비교" : tab === "favorites" ? "즐겨찾기" : tab === "settings" ? "설정" : null;
+  const tabTitle: MessageKey | null =
+    tab === "compare" ? "title.compare" : tab === "favorites" ? "title.favorites" : tab === "settings" ? "title.settings" : null;
+  // Desktop: list + map side by side on "nearby"; the comparison gets a wider two-column page.
+  const column = split ? "w-[440px]" : tab === "compare" ? "mx-auto w-full max-w-[560px] lg:max-w-[960px]" : "mx-auto w-full max-w-[560px]";
 
-  return (
+  const page = (
     <>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-ink"
       >
-        본문으로 건너뛰기
+        {t("common.skip")}
       </a>
       <header
         ref={headerRef}
-        className="pt-safe sticky top-0 z-30 mx-auto w-full max-w-[560px] bg-bg/90 backdrop-blur-md supports-[not(backdrop-filter:blur(0))]:bg-bg"
+        className={`pt-safe sticky top-0 z-30 bg-bg/90 backdrop-blur-md supports-[not(backdrop-filter:blur(0))]:bg-bg ${column}`}
       >
         {tabTitle ? (
-          <div className="flex h-14 items-center px-5">
-            <h1 className="text-[20px] font-bold">{tabTitle}</h1>
+          <div className="flex min-h-14 items-center px-5">
+            <h1 className="text-xl font-bold">{t(tabTitle)}</h1>
           </div>
         ) : (
           <>
-            <h1 className="sr-only">내 주변 주유 가격</h1>
+            <h1 className="sr-only">{t("title.nearby")}</h1>
             <Header
               locationLabel={locationLabel}
               locationMode={origin?.mode ?? null}
@@ -313,7 +382,7 @@ export function App() {
         className={
           isMap
             ? "fixed inset-x-0 z-0 mx-auto flex max-w-[560px] flex-col top-[var(--header-h,56px)] bottom-[var(--dock-h,160px)]"
-            : "mx-auto w-full max-w-[560px] pb-[calc(var(--dock-h,160px)+8px)]"
+            : `${column} pb-[calc(var(--dock-h,160px)+8px)]`
         }
       >
         {!isMap && (
@@ -337,11 +406,30 @@ export function App() {
 
       <div
         ref={dockRef}
-        className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[560px] border-t border-line bg-bg/95 backdrop-blur-md"
+        className={`fixed bottom-0 z-30 border-t border-line bg-bg/95 backdrop-blur-md ${
+          split ? "left-0 w-[440px]" : `inset-x-0 mx-auto ${tab === "compare" ? "max-w-[560px] lg:max-w-[960px]" : "max-w-[560px]"}`
+        }`}
       >
-        {tab === "nearby" && <ControlDock fuel={settings.fuel} radiusKm={settings.radiusKm} view={settings.view} />}
+        {tab === "nearby" && (
+          <ControlDock fuel={settings.fuel} radiusKm={settings.radiusKm} view={settings.view} showViewToggle={!split} />
+        )}
         <TabBar tab={tab} onChange={setTab} favoriteCount={favorites.length} />
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {split ? (
+        <div className="grid min-h-dvh grid-cols-[440px_minmax(0,1fr)]">
+          <div className="min-w-0 border-r border-line">{page}</div>
+          <aside className="sticky top-0 h-dvh" aria-label={t("map.region")}>
+            {mapView}
+          </aside>
+        </div>
+      ) : (
+        page
+      )}
 
       <p className="sr-only" aria-live="polite">
         {announcement}
@@ -357,6 +445,10 @@ export function App() {
         onHome={nearby.selectHome}
         onPlace={nearby.selectPlace}
       />
+
+      {timingOpen && timing && (
+        <TimingSheet model={timing} litres={settings.litres} fuelLabel={FUEL_LABELS[settings.fuel]} onClose={() => setTimingOpen(false)} />
+      )}
 
       {selectedStation && (
         <StationSheet
@@ -376,7 +468,7 @@ export function App() {
 
 function BootSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-[560px]" aria-busy="true" aria-label="불러오는 중">
+    <div className="mx-auto w-full max-w-[560px]" aria-busy="true">
       <div className="pt-safe">
         <div className="flex h-14 items-center px-5">
           <span className="skeleton h-5 w-36" />

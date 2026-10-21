@@ -59,7 +59,7 @@ export function Segmented<T extends string | number>({
               tabIndex={checked ? 0 : -1}
               onClick={() => onChange(o.value)}
               onKeyDown={(e) => onKeyDown(e, i)}
-              className={`${height} shrink-0 rounded-full px-3.5 text-[14px] font-semibold transition-colors ${
+              className={`${height} shrink-0 rounded-full px-3.5 text-sm font-semibold transition-colors ${
                 checked ? "bg-ink text-surface" : "bg-surface-2 text-ink-2 active:bg-surface-3"
               }`}
             >
@@ -72,7 +72,7 @@ export function Segmented<T extends string | number>({
   }
 
   return (
-    <div role="radiogroup" aria-label={label} className={`flex rounded-[12px] bg-surface-2 p-1 ${className}`}>
+    <div role="radiogroup" aria-label={label} className={`flex gap-0.5 rounded-[12px] bg-surface-2 p-1 ${className}`}>
       {options.map((o, i) => {
         const checked = o.value === value;
         return (
@@ -88,7 +88,7 @@ export function Segmented<T extends string | number>({
             tabIndex={checked ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`${height} flex flex-1 items-center justify-center gap-1.5 rounded-[9px] px-2.5 text-[15px] font-semibold transition-colors ${
+            className={`${height} flex min-w-fit flex-1 items-center justify-center gap-1.5 rounded-[9px] px-2.5 text-ui font-semibold transition-colors ${
               checked ? "bg-surface text-ink shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-ink-2"
             }`}
           >

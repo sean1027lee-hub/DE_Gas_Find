@@ -1,30 +1,36 @@
 "use client";
 /**
- * Map view (loaded on demand). Markers are price labels, coloured by tier
- * relative to the current result; the cheapest uses the price-sign style.
+ * Map view (loaded on demand). Markers are price labels with a tier shape
+ * (▼ ━ ▲) and colour relative to the current result; the cheapest uses the
+ * price-sign style. Tapping a pin opens a bottom card with directions
+ * (Google-Maps style); "Details" opens the full sheet.
  */
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl, { type Map as MlMap, type Marker } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
-import { priceParts, priceString } from "@/lib/format";
+import { translate, useT, type Lang } from "@/i18n";
+import { formatCtDiff, formatDistance, priceParts, priceString } from "@/lib/format";
 import type { LatLng } from "@/lib/geo";
+import { navUrl, type NavApp } from "@/lib/nav";
 import type { PriceTier, RankResult, RankedStation } from "@/lib/pricing";
 import type { Station } from "@/lib/types";
-import { Button } from "./Button";
-import { MapIcon } from "./icons";
-import { Price } from "./Price";
+import { Button, LinkButton } from "./Button";
+import { CloseIcon, MapIcon, NavigationIcon } from "./icons";
+import { AnimatedPrice } from "./Price";
 import { StatusMessage } from "./StatusMessage";
-import { stationTitle } from "./station-text";
+import { nameWithoutBrand, stationTitle } from "./station-text";
+import { TierBadge, TierIcon, tierIconSvg } from "./Tier";
 
 const STYLES = {
   light: "https://tiles.openfreemap.org/styles/positron",
   dark: "https://tiles.openfreemap.org/styles/dark",
 } as const;
 
-const TIER_CLASS: Record<PriceTier, string> = {
-  low: "bg-low-soft text-low ring-low/50",
-  mid: "bg-mid-soft text-mid ring-mid/40",
-  high: "bg-high-soft text-high ring-high/40",
+const PIN_CLASS: Record<PriceTier, string> = {
+  low: "bg-low-solid text-on-low ring-1 ring-black/10",
+  // Yellow is only 1.8:1 on light map tiles: always outline it.
+  mid: "bg-mid-solid text-on-mid ring-[1.5px] ring-mid",
+  high: "bg-high-solid text-on-high ring-1 ring-black/10",
 };
 
 interface MapViewProps {
@@ -32,9 +38,12 @@ interface MapViewProps {
   origin: LatLng | null;
   radiusKm: number;
   dark: boolean;
+  navApp: NavApp;
   onSelect: (station: Station) => void;
   onShowList: () => void;
 }
+
+type Entry = { marker: Marker; el: HTMLButtonElement; item: RankedStation };
 
 function circle(center: LatLng, km: number, steps = 72): GeoJSON.Feature<GeoJSON.Polygon> {
   const coords: [number, number][] = [];
@@ -56,24 +65,34 @@ function boundsFor(center: LatLng, km: number): maplibregl.LngLatBoundsLike {
   ];
 }
 
-function markerElement(item: RankedStation, onSelect: () => void): HTMLElement {
+function markerElement(item: RankedStation, lang: Lang, onSelect: () => void): HTMLButtonElement {
+  const t = (k: Parameters<typeof translate>[1], v?: Record<string, string>) => translate(lang, k, v);
   const { main, sup } = priceParts(item.price);
+  const [euros, cents] = main.split(",");
   const closed = !item.station.isOpen;
   const el = document.createElement("button");
   el.type = "button";
+  const visible = `${item.isCheapest ? `${t("tier.cheapest")} ` : ""}${priceString(item.price)}`;
   el.setAttribute(
     "aria-label",
-    `${stationTitle(item.station)} ${priceString(item.price)} 유로${item.isCheapest ? ", 최저가" : ""}${closed ? ", 영업 종료" : ""}`,
+    [
+      visible,
+      stationTitle(item.station),
+      item.isCheapest ? t("a11y.cheapestNearby") : closed ? t("status.closed") : t(`tier.${item.tier}`),
+    ].join(", "),
   );
   const tone = closed
-    ? "bg-surface-2 text-ink-3 ring-line"
+    ? "bg-surface-2 text-ink-3 ring-1 ring-line"
     : item.isCheapest
-      ? "bg-board text-board-ink ring-board-line text-[16px] px-2.5 py-1.5"
-      : TIER_CLASS[item.tier];
-  el.className = `num relative rounded-[9px] px-2 py-1 text-[14px] leading-none font-bold tracking-tight ring-1 shadow-[0_2px_6px_rgb(0_0_0/0.18)] ${tone}`;
-  const [euros, cents] = main.split(",");
+      ? "bg-board text-board-ink ring-2 ring-low-solid text-base px-2.5 py-1.5"
+      : PIN_CLASS[item.tier];
+  el.className = `num relative inline-flex items-center gap-1 rounded-[9px] px-2 py-1 text-sm leading-none font-extrabold shadow-[0_2px_6px_rgb(0_0_0/0.22)] ${tone}`;
   el.dataset.tier = closed ? "closed" : item.tier;
-  el.innerHTML = `${item.isCheapest ? '<span class="absolute -top-[18px] left-1/2 -translate-x-1/2 rounded-[5px] bg-low px-1 py-px font-sans text-[11px] font-bold text-white dark:text-[#06210f] whitespace-nowrap">최저</span>' : ""}${euros}<span class="price-comma">,</span>${cents}<span class="price-sup">${sup}</span>`;
+  const icon = !closed && !item.isCheapest ? tierIconSvg(item.tier) : "";
+  const badge = item.isCheapest
+    ? `<span class="absolute -top-[18px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[5px] bg-low-solid px-1 py-px font-sans text-[11px] font-bold text-on-low">${t("tier.cheapest")}</span>`
+    : "";
+  el.innerHTML = `${badge}${icon}<span>${euros}<span class="price-comma">,</span>${cents}<span class="price-sup">${sup}</span></span>`;
   el.addEventListener("click", (e) => {
     e.stopPropagation();
     onSelect();
@@ -88,29 +107,6 @@ function userElement(): HTMLElement {
   return el;
 }
 
-/**
- * Greedy label placement: cheapest first (closed last). A label that would overlap
- * an already placed one collapses to a small coloured dot; zooming in brings it back.
- */
-function declutterMarkers(map: MlMap, list: { marker: Marker; el: HTMLElement; item: RankedStation }[]) {
-  const order = [...list].sort(
-    (a, b) =>
-      Number(b.item.isCheapest) - Number(a.item.isCheapest) ||
-      Number(b.item.station.isOpen) - Number(a.item.station.isOpen) ||
-      a.item.price - b.item.price,
-  );
-  const placed: { x1: number; x2: number; y1: number; y2: number }[] = [];
-  for (const { marker, el, item } of order) {
-    const p = map.project(marker.getLngLat());
-    const w = item.isCheapest ? 84 : 66;
-    const h = item.isCheapest ? 52 : 30;
-    const box = { x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h - 4, y2: p.y - 4 };
-    const overlaps = placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1);
-    el.classList.toggle("tp-dot", overlaps);
-    if (!overlaps) placed.push(box);
-  }
-}
-
 function webglSupported(): boolean {
   try {
     const canvas = document.createElement("canvas");
@@ -120,17 +116,48 @@ function webglSupported(): boolean {
   }
 }
 
-export default function MapView({ result, origin, radiusKm, dark, onSelect, onShowList }: MapViewProps) {
+/**
+ * Greedy label placement: cheapest first (closed last). A label that would overlap
+ * an already placed one collapses to a small coloured dot; zooming in brings it back.
+ * The selected station always keeps its label.
+ */
+function declutterMarkers(map: MlMap, list: Entry[], selectedId: string | null) {
+  const order = [...list].sort(
+    (a, b) =>
+      Number(b.item.station.id === selectedId) - Number(a.item.station.id === selectedId) ||
+      Number(b.item.isCheapest) - Number(a.item.isCheapest) ||
+      Number(b.item.station.isOpen) - Number(a.item.station.isOpen) ||
+      a.item.price - b.item.price,
+  );
+  const placed: { x1: number; x2: number; y1: number; y2: number }[] = [];
+  for (const { marker, el, item } of order) {
+    const p = map.project(marker.getLngLat());
+    const w = item.isCheapest ? 84 : 76;
+    const h = item.isCheapest ? 52 : 30;
+    const box = { x1: p.x - w / 2, x2: p.x + w / 2, y1: p.y - h - 4, y2: p.y - 4 };
+    const overlaps = placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1);
+    el.classList.toggle("tp-dot", overlaps);
+    const selected = item.station.id === selectedId;
+    el.classList.toggle("tp-selected", selected);
+    el.style.zIndex = selected ? "2000" : (el.dataset.z ?? "0");
+    el.setAttribute("aria-pressed", String(selected));
+    if (!overlaps) placed.push(box);
+  }
+}
+
+export default function MapView({ result, origin, radiusKm, dark, navApp, onSelect, onShowList }: MapViewProps) {
+  const { t, lang } = useT();
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
-  const markers = useRef<{ marker: Marker; el: HTMLElement; item: RankedStation }[]>([]);
+  const markers = useRef<Entry[]>([]);
   const userMarker = useRef<Marker | null>(null);
   const [failed, setFailed] = useState(() => typeof window !== "undefined" && !webglSupported());
   const [styleReady, setStyleReady] = useState(0);
-  const selectRef = useRef(onSelect);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedRef = useRef<string | null>(null);
   useEffect(() => {
-    selectRef.current = onSelect;
-  }, [onSelect]);
+    selectedRef.current = selectedId;
+  }, [selectedId]);
 
   // Create the map once.
   useEffect(() => {
@@ -154,19 +181,20 @@ export default function MapView({ result, origin, radiusKm, dark, onSelect, onSh
       return;
     }
     map.touchZoomRotate.disableRotation();
-    const declutter = () => declutterMarkers(map, markers.current);
+    const declutter = () => declutterMarkers(map, markers.current, selectedRef.current);
     map.on("moveend", declutter);
+    map.on("click", () => setSelectedId(null));
     map.on("style.load", () => setStyleReady((n) => n + 1));
     map.on("error", (e) => {
       if (!map.isStyleLoaded() && (e.error as { status?: number })?.status !== undefined) setFailed(true);
     });
     mapRef.current = map;
     return () => {
+      map.off("moveend", declutter);
       map.remove();
       mapRef.current = null;
       markers.current = [];
       userMarker.current = null;
-      map.off("moveend", declutter);
     };
     // Recreating on origin/radius would reset the camera; those are handled below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,7 +229,10 @@ export default function MapView({ result, origin, radiusKm, dark, onSelect, onSh
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !origin) return;
-    map.fitBounds(boundsFor(origin, radiusKm), { padding: 24, duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 400 });
+    map.fitBounds(boundsFor(origin, radiusKm), {
+      padding: 24,
+      duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 400,
+    });
   }, [origin, radiusKm]);
 
   // User position.
@@ -220,61 +251,153 @@ export default function MapView({ result, origin, radiusKm, dark, onSelect, onSh
     if (!result) return;
     const items = [...result.closed, ...[...result.open].sort((a, b) => b.price - a.price)];
     markers.current = items.map((item, i) => {
-      const el = markerElement(item, () => selectRef.current(item.station));
+      const el = markerElement(item, lang, () => setSelectedId(item.station.id));
       el.style.zIndex = String(item.isCheapest ? 1000 : i);
+      el.dataset.z = el.style.zIndex;
       const marker = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -4] })
         .setLngLat([item.station.lng, item.station.lat])
         .addTo(map);
       return { marker, el, item };
     });
-    declutterMarkers(map, markers.current);
-  }, [result, failed]);
+    declutterMarkers(map, markers.current, selectedRef.current);
+  }, [result, failed, lang]);
+
+  // Selection: keep the selected pin labelled and on top.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    declutterMarkers(map, markers.current, selectedId);
+  }, [selectedId]);
+
+  // Escape clears the selection.
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSelectedId(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId]);
 
   if (failed) {
     return (
       <StatusMessage
         icon={<MapIcon size={22} />}
-        title="지도를 불러오지 못했어요"
-        description="네트워크 상태를 확인하거나 목록으로 가격을 확인하세요."
-        actions={<Button onClick={onShowList}>목록으로 보기</Button>}
+        title={t("map.failed")}
+        description={t("map.failedDesc")}
+        actions={<Button onClick={onShowList}>{t("map.showList")}</Button>}
       />
     );
   }
 
+  const selected = result ? [...result.open, ...result.closed].find((r) => r.station.id === selectedId) ?? null : null;
   const cheapest = result?.cheapest;
 
   return (
     <div className="relative h-full w-full">
-      <div ref={container} className="h-full w-full" role="region" aria-label="주유소 가격 지도" />
-      {cheapest && (
+      <div ref={container} className="h-full w-full" role="region" aria-label={t("map.region")} />
+
+      {cheapest && !selected && (
         <button
           type="button"
-          onClick={() => onSelect(cheapest.station)}
-          className="absolute top-3 left-3 flex items-center gap-2.5 rounded-[12px] bg-board px-3 py-2 text-left text-board-ink shadow-[0_4px_14px_rgb(0_0_0/0.25)] ring-1 ring-board-line"
+          onClick={() => setSelectedId(cheapest.station.id)}
+          className="absolute top-3 left-3 flex max-w-[calc(100%-1.5rem)] items-center gap-2.5 rounded-[12px] bg-board px-3 py-2 text-left text-board-ink shadow-[0_4px_14px_rgb(0_0_0/0.25)] ring-1 ring-board-line"
         >
-          <span className="text-[12px] text-board-ink-2">최저</span>
-          <Price price={cheapest.price} className="text-[20px] font-bold" label="최저가" />
-          <span className="max-w-[120px] truncate text-[14px] font-semibold" lang="de">
+          <span className="text-xs text-board-ink-2">{t("tier.cheapest")}</span>
+          <AnimatedPrice price={cheapest.price} className="text-xl font-extrabold" label={t("a11y.cheapestNearby")} />
+          <span className="truncate text-sm font-semibold" lang="de">
             {stationTitle(cheapest.station)}
           </span>
         </button>
       )}
-      <div
-        className="absolute bottom-3 left-3 flex items-center gap-2.5 rounded-full bg-surface/95 px-3 py-1.5 text-[12px] font-semibold shadow-[0_2px_8px_rgb(0_0_0/0.15)]"
-      >
-        <span className="flex items-center gap-1 text-low">
-          <span className="size-2.5 rounded-full bg-low" aria-hidden="true" />
-          저렴
-        </span>
-        <span className="flex items-center gap-1 text-mid">
-          <span className="size-2.5 rounded-full bg-mid" aria-hidden="true" />
-          보통
-        </span>
-        <span className="flex items-center gap-1 text-high">
-          <span className="size-2.5 rounded-full bg-high" aria-hidden="true" />
-          비쌈
-        </span>
-      </div>
+
+      {!selected && (
+        <div className="absolute bottom-3 left-3 flex items-center gap-2.5 rounded-full bg-surface/95 px-3 py-1.5 text-xs font-bold shadow-[0_2px_8px_rgb(0_0_0/0.15)]">
+          {(["low", "mid", "high"] as PriceTier[]).map((tier) => (
+            <span key={tier} className={`flex items-center gap-1 ${tier === "low" ? "text-low" : tier === "mid" ? "text-mid" : "text-high"}`}>
+              <TierIcon tier={tier} size={11} />
+              {t(`tier.${tier}`)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {selected && (
+        <MapCard
+          item={selected}
+          navApp={navApp}
+          onDetails={() => onSelect(selected.station)}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function MapCard({
+  item,
+  navApp,
+  onDetails,
+  onClose,
+}: {
+  item: RankedStation;
+  navApp: NavApp;
+  onDetails: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useT();
+  const { station, price, distanceKm, diffToMin, tier, isCheapest } = item;
+  const closed = !station.isOpen;
+  const name = `${stationTitle(station)} ${station.brand ? nameWithoutBrand(station) : ""}`.trim();
+  const app = t(navApp === "apple" ? "nav.apple" : "nav.google");
+  return (
+    <section
+      aria-label={name}
+      className="animate-sheet-in absolute inset-x-3 bottom-3 rounded-[16px] bg-surface p-3.5 shadow-[0_6px_24px_rgb(0_0_0/0.25)]"
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base leading-tight" lang="de">
+            <strong className="font-semibold">{stationTitle(station)}</strong>
+            {station.brand && <span className="ml-1.5 text-ink-2">{nameWithoutBrand(station)}</span>}
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-ink-2">
+            <span className="tnum">{formatDistance(distanceKm)}</span>
+            <span>·</span>
+            <span>{t(closed ? "status.closed" : "status.open")}</span>
+            {!closed &&
+              (isCheapest || diffToMin === 0 ? (
+                <TierBadge tier="low">{t("tier.cheapest")}</TierBadge>
+              ) : (
+                <TierBadge tier={tier}>
+                  <span className="tnum">{formatCtDiff(diffToMin)}</span>
+                </TierBadge>
+              ))}
+          </p>
+        </div>
+        <AnimatedPrice price={price} className="text-price leading-none font-extrabold" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="-mt-1 -mr-1.5 grid size-11 shrink-0 place-items-center rounded-full text-ink-2 active:bg-surface-2"
+          aria-label={t("map.deselect")}
+        >
+          <CloseIcon size={20} />
+        </button>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <LinkButton
+          href={navUrl(navApp, station, name)}
+          target="_blank"
+          rel="noopener"
+          className="flex-1"
+          aria-label={t("hero.navigateAria", { name, app })}
+        >
+          <NavigationIcon size={18} />
+          {t("sheet.navWith", { app })}
+        </LinkButton>
+        <Button variant="secondary" onClick={onDetails}>
+          {t("map.details")}
+        </Button>
+      </div>
+    </section>
   );
 }

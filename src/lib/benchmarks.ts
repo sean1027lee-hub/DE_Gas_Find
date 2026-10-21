@@ -32,11 +32,6 @@ export function benchmarkFuel(fuel: Fuel): BenchmarkFuel {
   return fuel === "diesel" ? "diesel" : "euro95";
 }
 
-export const BENCHMARK_FUEL_LABELS: Record<BenchmarkFuel, string> = {
-  euro95: "휘발유 (Super 95)",
-  diesel: "디젤",
-};
-
 export interface Point {
   date: string;
   price: number;
@@ -115,12 +110,6 @@ export function verdictFor(percentile: number): Verdict {
   return "mid";
 }
 
-export const VERDICT_LABELS: Record<Verdict, string> = {
-  low: "싼 편",
-  mid: "보통",
-  high: "비싼 편",
-};
-
 export interface YearSummary {
   year: number;
   average: number;
@@ -150,17 +139,8 @@ export function yearlySummary(series: Point[]): YearSummary[] {
 /** Germany's land neighbours that report to the Oil Bulletin (Switzerland is not in the EU). */
 export const NEIGHBOURS = ["DK", "NL", "BE", "LU", "FR", "AT", "CZ", "PL"] as const;
 
-export const COUNTRY_NAMES: Record<string, string> = {
-  AT: "오스트리아", BE: "벨기에", BG: "불가리아", CY: "키프로스", CZ: "체코", DE: "독일", DK: "덴마크",
-  EE: "에스토니아", ES: "스페인", FI: "핀란드", FR: "프랑스", GR: "그리스", EL: "그리스", HR: "크로아티아",
-  HU: "헝가리", IE: "아일랜드", IT: "이탈리아", LT: "리투아니아", LU: "룩셈부르크", LV: "라트비아",
-  MT: "몰타", NL: "네덜란드", PL: "폴란드", PT: "포르투갈", RO: "루마니아", SE: "스웨덴", SI: "슬로베니아",
-  SK: "슬로바키아", EU: "EU 평균", EUR: "유로존 평균",
-};
-
 export interface RankedCountry {
   code: string;
-  name: string;
   price: number;
   /** Price minus Germany's price (€/L). */
   diffToGermany: number;
@@ -177,7 +157,6 @@ export function rankCountries(b: Benchmarks, fuel: BenchmarkFuel, codes?: readon
     .filter((c) => c[fuel] !== null && (!codes || codes.includes(c.code) || c.code === "DE"))
     .map((c) => ({
       code: c.code,
-      name: COUNTRY_NAMES[c.code] ?? c.code,
       price: c[fuel] as number,
       diffToGermany: Math.round(((c[fuel] as number) - de) * 1000) / 1000,
       yearAgo: c[`${fuel}YearAgo`],

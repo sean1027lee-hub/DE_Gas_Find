@@ -5,6 +5,7 @@
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "@/i18n";
 import { CloseIcon } from "./icons";
 
 interface BottomSheetProps {
@@ -23,6 +24,7 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function BottomSheet({ open, onClose, title, hideTitle, children, footer }: BottomSheetProps) {
+  const { t } = useT();
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState(0);
@@ -115,7 +117,7 @@ export function BottomSheet({ open, onClose, title, hideTitle, children, footer 
             type="button"
             onClick={onClose}
             className="-mr-2 grid size-11 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-surface-2"
-            aria-label="닫기"
+            aria-label={t("common.close")}
           >
             <CloseIcon size={22} />
           </button>

@@ -4,10 +4,9 @@
  * Germany vs. its own history, vs. neighbouring countries, and the tax share.
  */
 import { useMemo, useState, type ReactNode } from "react";
+import { useT, type MessageKey } from "@/i18n";
 import {
-  BENCHMARK_FUEL_LABELS,
   NEIGHBOURS,
-  VERDICT_LABELS,
   germanyRank,
   rankCountries,
   seriesOf,
@@ -20,9 +19,10 @@ import {
   type Benchmarks,
   type RankedCountry,
 } from "@/lib/benchmarks";
-import { formatCtDiff, formatEuro, formatIsoDate, formatLitrePrice, formatMonthDay } from "@/lib/format";
+import { formatCt, formatCtDiff, formatEuro, formatLitrePrice, formatMonthDay } from "@/lib/format";
 import { Segmented } from "./Segmented";
 import { StatusMessage } from "./StatusMessage";
+import { TierBadge } from "./Tier";
 import { TrendChart } from "./TrendChart";
 
 interface CompareViewProps {
@@ -34,19 +34,13 @@ interface CompareViewProps {
 
 type Range = 1 | 3 | 10;
 
-const VERDICT_STYLE = {
-  low: "bg-low-soft text-low",
-  mid: "bg-mid-soft text-mid",
-  high: "bg-high-soft text-high",
-} as const;
-
 function Card({ title, sub, children, id }: { title: string; sub?: ReactNode; children: ReactNode; id: string }) {
   return (
-    <section aria-labelledby={id} className="mx-4 mt-4 rounded-[var(--radius-card)] bg-surface px-4 pt-4 pb-4">
-      <h2 id={id} className="text-[17px] font-bold">
+    <section aria-labelledby={id} className="mt-4 rounded-[var(--radius-card)] bg-surface px-4 pt-4 pb-4">
+      <h2 id={id} className="text-title font-bold">
         {title}
       </h2>
-      {sub && <p className="mt-0.5 text-[13px] text-ink-2">{sub}</p>}
+      {sub && <p className="mt-0.5 text-meta text-ink-2">{sub}</p>}
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -55,18 +49,21 @@ function Card({ title, sub, children, id }: { title: string; sub?: ReactNode; ch
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="rounded-[10px] bg-surface-2 px-3 py-2.5">
-      <dt className="text-[12px] font-medium text-ink-2">{label}</dt>
-      <dd className="tnum mt-0.5 text-[17px] font-bold">{value}</dd>
-      {note && <dd className="tnum text-[12px] text-ink-3">{note}</dd>}
+      <dt className="text-xs font-medium text-ink-2">{label}</dt>
+      <dd className="tnum mt-0.5 text-title font-bold">{value}</dd>
+      {note && <dd className="tnum text-xs text-ink-3">{note}</dd>}
     </div>
   );
 }
 
-const ctPerLitre = (diff: number) => `리터당 ${formatCtDiff(diff).replace("+", "").replace("−", "")}`;
+const signedEuro = (v: number) => `${v >= 0 ? "+" : "−"}${formatEuro(Math.abs(v))}`;
 
 export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewProps) {
+  const { t, lang } = useT();
   const [range, setRange] = useState<Range>(3);
   const [allCountries, setAllCountries] = useState(false);
+  const country = (code: string) => t(`country.${code}` as MessageKey);
+  const day = (iso: string) => formatMonthDay(iso, lang);
 
   const series = useMemo(() => (data ? seriesOf(data, fuel) : []), [data, fuel]);
   const three = useMemo(() => windowStats(series, 3), [series]);
@@ -74,13 +71,10 @@ export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewPro
   const rangePoints = useMemo(() => windowOf(series, range), [series, range]);
   const years = useMemo(() => yearlySummary(series), [series]);
 
-  if (!data) {
-    return <div className="skeleton mx-4 h-64" aria-label="비교 데이터 불러오는 중" />;
-  }
-  if (!three || !ranged) {
-    return <StatusMessage title="비교 데이터가 없어요" description="잠시 후 다시 확인해 주세요." />;
-  }
+  if (!data) return <div className="skeleton mx-4 h-64" aria-label={t("cmp.loading")} />;
+  if (!three || !ranged) return <StatusMessage title={t("cmp.noData")} description={t("error.later")} />;
 
+  const fuelName = t(fuel === "diesel" ? "fuelGroup.diesel" : "fuelGroup.petrolLong");
   const verdict = verdictFor(three.percentile);
   const diff3y = three.latest.price - three.average;
   const yoy = three.yearAgo ? three.latest.price - three.yearAgo.price : null;
@@ -94,115 +88,118 @@ export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewPro
   const maxPrice = Math.max(...countries.map((c) => c.price));
   const percentileText =
     verdict === "high"
-      ? `최근 3년 중 비싼 상위 ${Math.max(1, 100 - three.percentile)}%`
+      ? t("cmp.pctHigh", { n: Math.max(1, 100 - three.percentile) })
       : verdict === "low"
-        ? `최근 3년 중 싼 하위 ${Math.max(1, three.percentile)}%`
-        : `최근 3년 중 중간 수준 (${three.percentile}번째 백분위)`;
+        ? t("cmp.pctLow", { n: Math.max(1, three.percentile) })
+        : t("cmp.pctMid", { n: three.percentile });
+  const [euros, decimals] = three.latest.price.toFixed(3).split(".");
 
   return (
-    <div className="pb-2">
-      <div className="px-4">
+    <div className="px-4 pb-2 lg:grid lg:grid-cols-2 lg:gap-x-4 lg:[&>*]:min-w-0">
+      <div className="lg:col-span-2">
         <Segmented<BenchmarkFuel>
-          label="비교할 연료"
+          label={t("cmp.fuelLabel")}
           value={fuel}
           onChange={onFuelChange}
           options={[
-            { value: "euro95", label: "휘발유" },
-            { value: "diesel", label: "디젤" },
+            { value: "euro95", label: t("cmp.segPetrol") },
+            { value: "diesel", label: t("cmp.segDiesel") },
           ]}
         />
       </div>
 
       {/* Headline: this week vs. the last three years */}
-      <section aria-labelledby="cmp-now" className="mx-4 mt-4 rounded-[var(--radius-card)] bg-board px-4 pt-3.5 pb-4 text-board-ink ring-1 ring-board-line">
-        <h2 id="cmp-now" className="text-[13px] text-board-ink-2">
-          독일 전국 평균 · {BENCHMARK_FUEL_LABELS[fuel]} · {formatMonthDay(three.latest.date)} 주
+      <section
+        aria-labelledby="cmp-now"
+        className="mt-4 rounded-[var(--radius-card)] bg-board px-4 pt-3.5 pb-4 text-board-ink ring-1 ring-board-line lg:col-span-2"
+      >
+        <h2 id="cmp-now" className="text-meta text-board-ink-2">
+          {t("cmp.nowLabel", { fuel: fuelName, date: day(three.latest.date) })}
         </h2>
-        <div className="mt-1 flex items-end justify-between gap-3">
-          <span className="num text-[48px] leading-[1.05] font-bold tracking-[-0.03em]">
-            {Math.floor(three.latest.price)}
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+          <span className="num text-display-md leading-[1.05] font-extrabold tracking-[-0.04em]">
+            {euros}
             <span className="price-comma">,</span>
-            {three.latest.price.toFixed(3).split(".")[1]}
-            <span className="ml-1.5 font-sans text-[18px] font-semibold tracking-normal text-board-ink-2">€/L</span>
+            {decimals}
+            <span className="ml-1.5 font-sans text-lg font-semibold tracking-normal text-board-ink-2">€/L</span>
           </span>
-          <span className={`mb-2 shrink-0 rounded-md px-2 py-1 text-[14px] font-bold ${VERDICT_STYLE[verdict]}`}>
-            {VERDICT_LABELS[verdict]}
-          </span>
+          <TierBadge tier={verdict} className="mb-2 px-2 py-1 text-sm">
+            {t(`verdict.${verdict}`)}
+          </TierBadge>
         </div>
-        <p className="mt-2 text-[15px] leading-relaxed">
-          최근 3년 평균({formatLitrePrice(three.average)})보다{" "}
+        <p className="mt-2 text-ui leading-relaxed">
           <strong className="font-semibold">
-            {ctPerLitre(diff3y)} {diff3y >= 0 ? "비싸요" : "싸요"}
+            {t(diff3y >= 0 ? "cmp.higher" : "cmp.lower", { avg: formatLitrePrice(three.average), ct: formatCt(Math.abs(diff3y)) })}
           </strong>
-          .
         </p>
-        <p className="mt-0.5 text-[13px] text-board-ink-2">{percentileText}</p>
+        <p className="mt-0.5 text-meta text-board-ink-2">{percentileText}</p>
       </section>
 
       {/* What it means for one fill-up */}
-      <Card id="cmp-fill" title={`${litres}L 한 번 주유하면`} sub="독일 전국 평균 가격 기준">
-        <dl className="grid grid-cols-3 gap-2">
-          <Stat label="이번 주" value={formatEuro(three.latest.price * litres)} />
+      <Card id="cmp-fill" title={t("cmp.fillTitle", { litres })} sub={t("cmp.fillSub")}>
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
+          <Stat label={t("cmp.thisWeek")} value={formatEuro(three.latest.price * litres)} />
           <Stat
-            label="1년 전"
+            label={t("cmp.yearAgo")}
             value={three.yearAgo ? formatEuro(three.yearAgo.price * litres) : "–"}
-            note={yoy !== null ? `지금 ${yoy >= 0 ? "+" : "−"}${formatEuro(Math.abs(yoy * litres))}` : undefined}
+            note={yoy !== null ? t("cmp.nowDiff", { diff: signedEuro(yoy * litres) }) : undefined}
           />
           <Stat
-            label="3년 평균"
+            label={t("cmp.avg3y")}
             value={formatEuro(three.average * litres)}
-            note={`지금 ${diff3y >= 0 ? "+" : "−"}${formatEuro(Math.abs(diff3y * litres))}`}
+            note={t("cmp.nowDiff", { diff: signedEuro(diff3y * litres) })}
           />
         </dl>
       </Card>
 
       {/* Trend */}
-      <Card id="cmp-trend" title="가격 추이" sub="주간 전국 평균, 세금 포함">
+      <Card id="cmp-trend" title={t("cmp.trendTitle")} sub={t("cmp.trendSub")}>
         <Segmented<Range>
-          label="기간"
+          label={t("cmp.range")}
           size="sm"
           value={range}
           onChange={setRange}
-          options={[
-            { value: 1, label: "1년" },
-            { value: 3, label: "3년" },
-            { value: 10, label: "10년" },
-          ]}
+          options={([1, 3, 10] as Range[]).map((n) => ({ value: n, label: t("cmp.years", { n }) }))}
         />
-        <div className="mt-3 flex items-center gap-4 text-[12px] text-ink-2" aria-hidden="true">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-2" aria-hidden="true">
           <span className="flex items-center gap-1.5">
             <span className="h-0.5 w-4 rounded-full bg-accent" />
-            주간 평균
+            {t("cmp.legendWeekly")}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-4 border-t-[1.5px] border-dashed border-ink-2" />
-            {range}년 평균 {formatLitrePrice(ranged.average)}
+            {t("cmp.legendAvg", { n: range, price: formatLitrePrice(ranged.average) })}
           </span>
         </div>
-        <div className="mt-1 -mx-1">
+        <div className="-mx-1 mt-1">
           <TrendChart
             points={rangePoints}
             average={ranged.average}
-            label={`최근 ${range}년 독일 ${BENCHMARK_FUEL_LABELS[fuel]} 주간 평균 가격 추이. 평균 ${formatLitrePrice(ranged.average)}, 최저 ${formatLitrePrice(ranged.min.price)}, 최고 ${formatLitrePrice(ranged.max.price)}, 이번 주 ${formatLitrePrice(ranged.latest.price)}`}
+            label={t("cmp.chartAria", {
+              n: range,
+              fuel: fuelName,
+              avg: formatLitrePrice(ranged.average),
+              min: formatLitrePrice(ranged.min.price),
+              max: formatLitrePrice(ranged.max.price),
+              now: formatLitrePrice(ranged.latest.price),
+            })}
           />
         </div>
-        <dl className="mt-3 grid grid-cols-3 gap-2">
-          <Stat label={`${range}년 평균`} value={formatLitrePrice(ranged.average)} />
-          <Stat label="최저" value={formatLitrePrice(ranged.min.price)} note={formatIsoDate(ranged.min.date)} />
-          <Stat label="최고" value={formatLitrePrice(ranged.max.price)} note={formatIsoDate(ranged.max.date)} />
+        <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2">
+          <Stat label={t("cmp.statAvg", { n: range })} value={formatLitrePrice(ranged.average)} />
+          <Stat label={t("cmp.min")} value={formatLitrePrice(ranged.min.price)} note={ranged.min.date.replaceAll("-", ".")} />
+          <Stat label={t("cmp.max")} value={formatLitrePrice(ranged.max.price)} note={ranged.max.date.replaceAll("-", ".")} />
         </dl>
         <details className="group mt-3">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center text-[14px] font-semibold text-accent">
-            연도별 평균 표로 보기
-          </summary>
-          <table className="tnum mt-1 w-full text-[14px]">
-            <caption className="sr-only">연도별 독일 평균 가격 (€/L)</caption>
+          <summary className="flex min-h-11 cursor-pointer list-none items-center text-sm font-semibold text-accent">{t("cmp.yearTable")}</summary>
+          <table className="tnum mt-1 w-full text-sm">
+            <caption className="sr-only">{t("cmp.yearCaption")}</caption>
             <thead>
-              <tr className="text-left text-[12px] text-ink-2">
-                <th scope="col" className="py-1.5 font-medium">연도</th>
-                <th scope="col" className="py-1.5 text-right font-medium">평균</th>
-                <th scope="col" className="py-1.5 text-right font-medium">최저</th>
-                <th scope="col" className="py-1.5 text-right font-medium">최고</th>
+              <tr className="text-left text-xs text-ink-2">
+                <th scope="col" className="py-1.5 font-medium">{t("cmp.colYear")}</th>
+                <th scope="col" className="py-1.5 text-right font-medium">{t("cmp.colAvg")}</th>
+                <th scope="col" className="py-1.5 text-right font-medium">{t("cmp.min")}</th>
+                <th scope="col" className="py-1.5 text-right font-medium">{t("cmp.max")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -210,7 +207,7 @@ export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewPro
                 <tr key={y.year}>
                   <th scope="row" className="py-1.5 text-left font-medium">
                     {y.year}
-                    {y.weeks < 50 && <span className="ml-1 text-[12px] font-normal text-ink-3">({y.weeks}주)</span>}
+                    {y.weeks < 50 && <span className="ml-1 text-xs font-normal text-ink-3">{t("cmp.weeks", { n: y.weeks })}</span>}
                   </th>
                   <td className="py-1.5 text-right">{formatLitrePrice(y.average)}</td>
                   <td className="py-1.5 text-right text-ink-2">{formatLitrePrice(y.min)}</td>
@@ -225,46 +222,47 @@ export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewPro
       {/* Countries */}
       <Card
         id="cmp-countries"
-        title={allCountries ? "EU 27개국과 비교" : "이웃 나라와 비교"}
-        sub={rank ? `독일은 EU ${rank.of}개국 중 ${rank.of - rank.rank + 1}번째로 비싸요 · ${formatMonthDay(data.latestDate)} 주` : undefined}
+        title={t(allCountries ? "cmp.eu" : "cmp.neighbours")}
+        sub={rank ? t("cmp.rank", { of: rank.of, n: rank.of - rank.rank + 1, date: day(data.latestDate) }) : undefined}
       >
         {cheapestNeighbour && !allCountries && (
-          <p className="mb-3 rounded-[10px] bg-surface-2 px-3 py-2.5 text-[14px] leading-relaxed">
-            국경을 넘으면 <strong className="font-semibold">{cheapestNeighbour.name}</strong>가 가장 싸요 — 리터당{" "}
-            {formatCtDiff(-cheapestNeighbour.diffToGermany).replace("+", "")}, {litres}L에{" "}
-            <strong className="font-semibold">{formatEuro(-cheapestNeighbour.diffToGermany * litres)}</strong> 덜 들어요.
+          <p className="mb-3 rounded-[10px] bg-surface-2 px-3 py-2.5 text-sm leading-relaxed">
+            {t("cmp.border", {
+              country: country(cheapestNeighbour.code),
+              ct: formatCt(-cheapestNeighbour.diffToGermany),
+              litres,
+              euro: formatEuro(-cheapestNeighbour.diffToGermany * litres),
+            })}
           </p>
         )}
-        <ul className="space-y-1.5" aria-label="국가별 평균 가격, 싼 순">
+        <ul className="space-y-1.5" aria-label={t("cmp.countriesAria")}>
           {countries.map((c) => (
-            <CountryRow key={c.code} c={c} max={maxPrice} germany={de.price} />
+            <CountryRow key={c.code} c={c} name={country(c.code)} max={maxPrice} germany={de.price} baseline={t("cmp.baseline")} />
           ))}
         </ul>
-        {allCountries && countries.some((c) => c.code === "MT") && (
-          <p className="mt-2 text-[12px] text-ink-3">몰타는 정부가 연료 가격을 고정하고 있어요.</p>
-        )}
+        {allCountries && countries.some((c) => c.code === "MT") && <p className="mt-2 text-xs text-ink-3">{t("cmp.malta")}</p>}
         <button
           type="button"
           onClick={() => setAllCountries((v) => !v)}
           aria-expanded={allCountries}
-          className="mt-2 flex min-h-11 items-center text-[14px] font-semibold text-accent"
+          className="mt-2 flex min-h-11 items-center text-sm font-semibold text-accent"
         >
-          {allCountries ? "이웃 나라만 보기" : "EU 전체 보기"}
+          {t(allCountries ? "cmp.showNeighbours" : "cmp.showEu")}
         </button>
       </Card>
 
       {/* Taxes */}
       {tax && (
-        <Card id="cmp-tax" title="1리터 가격 중 세금" sub={`독일 · ${formatMonthDay(data.germanyTax.date)} 주`}>
+        <Card id="cmp-tax" title={t("cmp.taxTitle")} sub={t("cmp.taxSub", { date: day(data.germanyTax.date) })}>
           <div className="flex h-9 w-full gap-[2px] overflow-hidden rounded-[8px]" aria-hidden="true">
             <div className="bg-ink" style={{ width: `${tax.share}%` }} />
             <div className="flex-1 bg-surface-3" />
           </div>
-          <dl className="mt-3 grid grid-cols-2 gap-2 text-[14px]">
+          <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2 text-sm">
             <div>
               <dt className="flex items-center gap-1.5 text-ink-2">
                 <span className="size-2.5 rounded-[3px] bg-ink" aria-hidden="true" />
-                세금·부과금
+                {t("cmp.tax")}
               </dt>
               <dd className="tnum font-bold">
                 {formatLitrePrice(tax.tax)} <span className="font-medium text-ink-2">({tax.share}%)</span>
@@ -273,49 +271,44 @@ export function CompareView({ data, fuel, onFuelChange, litres }: CompareViewPro
             <div>
               <dt className="flex items-center gap-1.5 text-ink-2">
                 <span className="size-2.5 rounded-[3px] bg-surface-3 ring-1 ring-line" aria-hidden="true" />
-                제품·유통·마진
+                {t("cmp.net")}
               </dt>
               <dd className="tnum font-bold">
                 {formatLitrePrice(tax.net)} <span className="font-medium text-ink-2">({100 - tax.share}%)</span>
               </dd>
             </div>
           </dl>
-          <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
-            에너지세와 부가가치세(19%) 등이 포함돼요. 주유소끼리 다툴 수 있는 건 나머지 부분이라, 같은 날 주유소 간 차이는
-            보통 몇 센트 수준이에요.
-          </p>
+          <p className="mt-3 text-meta leading-relaxed text-ink-2">{t("cmp.taxNote")}</p>
         </Card>
       )}
 
-      <p className="px-5 pt-5 text-[12px] leading-relaxed text-ink-3">
-        출처: EU 집행위원회{" "}
+      <p className="pt-5 text-xs leading-relaxed text-ink-3 lg:col-span-2">
+        {t("cmp.sourcePrefix")}{" "}
         <a href={data.source.url} target="_blank" rel="noopener" className="underline underline-offset-2">
           Weekly Oil Bulletin
         </a>{" "}
-        (© European Union, CC BY 4.0). 매주 월요일 기준 국가 평균 판매가예요. Super 95는 E5에 해당하고, E10은 보통 이보다
-        조금 싸요. 주변 주유소 가격(MTS-K)과는 기준 시점과 방식이 달라요.
+        {t("cmp.sourceSuffix")}
       </p>
     </div>
   );
 }
 
-function CountryRow({ c, max, germany }: { c: RankedCountry; max: number; germany: number }) {
+function CountryRow({ c, name, max, germany, baseline }: { c: RankedCountry; name: string; max: number; germany: number; baseline: string }) {
   const width = `${Math.max(4, (c.price / max) * 100)}%`;
   const bar = c.isGermany ? "bg-accent" : c.isAggregate ? "bg-ink-3/45" : "bg-ink-3/70";
   return (
-    <li className={`grid grid-cols-[84px_1fr_auto] items-center gap-2.5 ${c.isGermany ? "font-bold" : ""}`}>
-      <span className={`truncate text-[14px] ${c.isAggregate ? "text-ink-2" : ""}`}>{c.name}</span>
-      <span className="h-3 w-full" aria-hidden="true">
+    <li className={`grid grid-cols-[minmax(5rem,auto)_1fr_auto] items-center gap-2.5 ${c.isGermany ? "font-bold" : ""}`}>
+      <span className={`truncate text-sm ${c.isAggregate ? "text-ink-2" : ""}`}>{name}</span>
+      <span className="h-3 w-full min-w-8" aria-hidden="true">
         <span className={`block h-full rounded-r-[4px] ${bar}`} style={{ width }} />
       </span>
-      <span className="tnum min-w-[118px] text-right text-[14px]">
+      <span className="tnum text-right text-sm whitespace-nowrap">
         {formatLitrePrice(c.price)}
-        {!c.isGermany && (
-          <span className={`ml-1.5 inline-block min-w-[52px] text-right text-[12px] font-medium ${c.price < germany ? "text-low" : "text-ink-2"}`}>
-            {formatCtDiff(c.diffToGermany)}
-          </span>
-        )}
-        {c.isGermany && <span className="ml-1.5 inline-block min-w-[52px] text-right text-[12px] font-medium text-ink-2">기준</span>}
+        <span
+          className={`ml-1.5 inline-block min-w-[3.25rem] text-right text-xs font-medium ${!c.isGermany && c.price < germany ? "text-low" : "text-ink-2"}`}
+        >
+          {c.isGermany ? baseline : formatCtDiff(c.diffToGermany)}
+        </span>
       </span>
     </li>
   );

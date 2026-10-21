@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 
 test("locate → list → detail sheet → navigation link", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?at=10:30");
 
   // First run: location is only requested after the button press.
   await page.getByRole("radio", { name: /Diesel/ }).click();
   await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
 
   // Summary card + list.
-  await expect(page.getByText("가장 싼 곳 · Diesel")).toBeVisible();
+  await expect(page.getByText("내 주변 최저가 · Diesel")).toBeVisible();
   await expect(page.getByText(/\d{2}:\d{2} 기준/)).toBeVisible();
   const rows = page.locator("section[aria-labelledby=list-heading] li button");
   await expect(rows.first()).toBeVisible();
@@ -50,7 +50,7 @@ test("API key never reaches the client", async ({ page, request }) => {
   });
   await page.goto("/");
   await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
-  await expect(page.getByText(/가장 싼 곳/)).toBeVisible();
+  await expect(page.getByText(/내 주변 최저가/)).toBeVisible();
   const api = await request.get("/api/stations?lat=49.87&lng=8.65&rad=5");
   responses.push(await api.text());
   for (const body of responses) {
@@ -61,25 +61,25 @@ test("API key never reaches the client", async ({ page, request }) => {
 test("works offline with the last result and labels it", async ({ page, context }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
-  await expect(page.getByText(/가장 싼 곳/)).toBeVisible();
+  await expect(page.getByText(/내 주변 최저가/)).toBeVisible();
   // Let the service worker take control and cache the shell.
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
-  await expect(page.getByText(/가장 싼 곳/)).toBeVisible();
+  await expect(page.getByText(/내 주변 최저가/)).toBeVisible();
 
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByText(/가장 싼 곳/)).toBeVisible();
+  await expect(page.getByText(/내 주변 최저가/)).toBeVisible();
   await expect(page.getByRole("button", { name: /가격 .* 기준/ })).toContainText("오프라인");
   await context.setOffline(false);
 });
 
 test("no axe violations on list and detail sheet", async ({ page }) => {
   const { default: AxeBuilder } = await import("@axe-core/playwright");
-  await page.goto("/");
+  await page.goto("/?at=10:30");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
-  await expect(page.getByText(/가장 싼 곳/)).toBeVisible();
+  await expect(page.getByText(/내 주변 최저가/)).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.locator("section[aria-labelledby=list-heading] li button").first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -115,4 +115,46 @@ test("compare tab: national trend, neighbours and taxes", async ({ page }) => {
   await page.getByRole("button", { name: "EU 전체 보기" }).click();
   await expect(page.getByRole("heading", { name: "EU 27개국과 비교" })).toBeVisible();
   expect((await new AxeBuilder({ page }).withTags(["wcag2aa"]).analyze()).violations).toEqual([]);
+});
+
+test("timing: '지금 넣을까?' explains the 12:00 rule with a 24-hour forecast", async ({ page }) => {
+  const { default: AxeBuilder } = await import("@axe-core/playwright");
+  await page.goto("/?at=10:30");
+  await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
+  const card = page.getByRole("button", { name: /지금 넣을까/ });
+  await expect(card).toContainText("지금 넣어도 좋아요");
+  await card.click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("list", { name: "시간대별 예상 가격" }).getByRole("listitem")).toHaveCount(24);
+  await expect(sheet).toContainText("12시에만 가격을 올릴 수 있어요");
+  expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(["wcag2aa"]).analyze()).violations).toEqual([]);
+});
+
+test("timing after the noon raise suggests waiting", async ({ page }) => {
+  await page.goto("/?at=13:10");
+  await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
+  await expect(page.getByRole("button", { name: /지금 넣을까/ })).toContainText("기다려 보세요");
+});
+
+test("preview scenarios: empty and error states lead somewhere", async ({ page }) => {
+  await page.goto("/?scenario=empty");
+  await page.getByRole("button", { name: "내 주변 가격 보기" }).click();
+  await expect(page.getByRole("button", { name: "10 km로 넓히기" })).toBeVisible();
+
+  await page.goto("/?scenario=error");
+  await expect(page.getByText("가격을 불러오지 못했어요")).toBeVisible();
+  await expect(page.getByRole("button", { name: "다시 시도" })).toBeVisible();
+});
+
+test.describe("German device", () => {
+  test.use({ locale: "de-DE" });
+  test("UI follows the device language", async ({ page }) => {
+    await page.goto("/?at=10:30");
+    await page.getByRole("button", { name: "Preise in meiner Nähe" }).click();
+    await expect(page.getByText(/Günstigste in der Nähe/)).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("lang", "de");
+    await page.getByRole("button", { name: "Einstellungen" }).click();
+    await page.getByRole("radio", { name: "한국어" }).click();
+    await expect(page.getByRole("heading", { name: "설정" })).toBeVisible();
+  });
 });
