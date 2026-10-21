@@ -184,6 +184,12 @@
   }
 }
 
+/* Pre-hydration: pick onboarding vs. skeleton from the boot script's flag. */
+html[data-onboarded] .tp-onboarding,
+html:not([data-onboarded]) .tp-boot {
+  display: none;
+}
+
 @keyframes shimmer {
   from {
     background-position: 100% 0;

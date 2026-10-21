@@ -20,7 +20,8 @@ import { Onboarding } from "./Onboarding";
 import { RefreshIcon } from "./icons";
 import { SettingsView } from "./SettingsView";
 import { StationSheet } from "./StationSheet";
-import { StatusMessage } from "./StatusMessage";
+import { RowSkeleton, StatusMessage } from "./StatusMessage";
+import { SummarySkeleton } from "./SummaryCard";
 import { TabBar, type Tab } from "./TabBar";
 
 const MapView = dynamic(() => import("./MapView"), {
@@ -115,7 +116,25 @@ export function App() {
   }, [tab]);
 
   if (!hydrated) {
-    return <div className="min-h-dvh bg-bg" aria-busy="true" />;
+    // Server render + hydration: first-time visitors see the real onboarding screen
+    // immediately; returning visitors (flagged by the boot script) see the app skeleton.
+    return (
+      <>
+        <div className="tp-boot">
+          <BootSkeleton />
+        </div>
+        <div className="tp-onboarding">
+          <Onboarding
+            settings={settings}
+            locating={false}
+            locError={null}
+            onLocate={nearby.locate}
+            onHome={nearby.selectHome}
+            onPlace={nearby.selectPlace}
+          />
+        </div>
+      </>
+    );
   }
 
   if (!settings.onboarded) {
@@ -322,5 +341,25 @@ export function App() {
         />
       )}
     </>
+  );
+}
+
+function BootSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-[560px]" aria-busy="true" aria-label="불러오는 중">
+      <div className="pt-safe">
+        <div className="flex h-14 items-center px-5">
+          <span className="skeleton h-5 w-36" />
+        </div>
+      </div>
+      <div className="px-4 pt-2">
+        <SummarySkeleton />
+      </div>
+      <ul className="mx-4 mt-6 overflow-hidden rounded-[var(--radius-card)] bg-surface">
+        {Array.from({ length: 4 }, (_, i) => (
+          <RowSkeleton key={i} />
+        ))}
+      </ul>
+    </div>
   );
 }

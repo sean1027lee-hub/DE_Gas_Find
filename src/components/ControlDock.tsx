@@ -13,7 +13,7 @@ interface ControlDockProps {
 /** Bottom = controls, in thumb reach. */
 export function ControlDock({ fuel, radiusKm, view }: ControlDockProps) {
   return (
-    <div className="space-y-2 px-3 pt-2.5 pb-2">
+    <section aria-label="검색 조건" className="space-y-2 px-3 pt-2.5 pb-2">
       <div className="flex items-center gap-2">
         <Segmented
           label="연료"
@@ -51,6 +51,6 @@ export function ControlDock({ fuel, radiusKm, view }: ControlDockProps) {
           className="scrollbar-none overflow-x-auto"
         />
       </div>
-    </div>
+    </section>
   );
 }

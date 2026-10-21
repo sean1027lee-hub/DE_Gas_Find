@@ -25,6 +25,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.56.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.5",
@@ -36,5 +37,12 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
-  }
+  },
+  "browserslist": [
+    "iOS >= 16",
+    "Safari >= 16",
+    "Chrome >= 111",
+    "Edge >= 111",
+    "Firefox >= 115"
+  ]
 }
