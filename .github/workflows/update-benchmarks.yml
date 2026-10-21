@@ -7,6 +7,11 @@ on:
         description: "Only print the workbook structure"
         type: boolean
         default: false
+  push:
+    branches: [master]
+    paths:
+      - scripts/update-benchmarks.mjs
+      - .github/workflows/update-benchmarks.yml
   schedule:
     # Tuesdays 09:17 UTC — the Oil Bulletin is usually published on Monday/Tuesday.
     - cron: "17 9 * * 2"
@@ -25,5 +30,5 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Inspect workbook
-        if: ${{ inputs.inspect }}
+        if: ${{ inputs.inspect || github.event_name == 'push' }}
         run: node scripts/update-benchmarks.mjs --inspect
