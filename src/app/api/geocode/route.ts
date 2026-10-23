@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { TtlCache } from "@/lib/cache";
 import { isInGermanyArea, isValidLatLng, snapToGrid } from "@/lib/geo";
 import { mockSearch, reverseLabel, searchPlaces } from "@/lib/geocode";
-import { cacheHeaders, jsonError, mode, parseNumber } from "@/lib/server";
+import { cacheHeaders, jsonError, mode, parseNumber, rateLimited } from "@/lib/server";
 import type { GeocodeResult } from "@/lib/types";
 
 const DAY = 24 * 3600;
@@ -14,6 +14,8 @@ const reverseCache = new TtlCache<string | null>(DAY * 1000, 2000);
  * GET /api/geocode?lat=…&lng=…    → { label: string | null }
  */
 export async function GET(req: NextRequest) {
+  const limited = rateLimited(req);
+  if (limited) return limited;
   const q = req.nextUrl.searchParams;
   const mock = mode() === "mock";
 

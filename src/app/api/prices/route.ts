@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { TtlCache } from "@/lib/cache";
-import { backend, cacheHeaders, jsonError, noKeyError, sleep, sourceOf, upstreamError } from "@/lib/server";
+import { backend, cacheHeaders, jsonError, noKeyError, rateLimited, sleep, sourceOf, upstreamError } from "@/lib/server";
 import { fetchPrices, isStationId, PRICES_BATCH } from "@/lib/tankerkoenig";
 import type { PricesResponse, PriceUpdate } from "@/lib/types";
 
@@ -10,6 +10,8 @@ const cache = new TtlCache<{ prices: Record<string, PriceUpdate>; fetchedAt: str
 
 /** GET /api/prices?ids=uuid,uuid,… — batches of 10 upstream, each cached for 5 minutes. */
 export async function GET(req: NextRequest) {
+  const limited = rateLimited(req);
+  if (limited) return limited;
   const raw = req.nextUrl.searchParams.get("ids") ?? "";
   const ids = [...new Set(raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean))].sort();
   if (ids.length === 0 || ids.length > MAX_IDS || !ids.every(isStationId)) {

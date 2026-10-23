@@ -1,6 +1,7 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { mockDetailResponse, mockListResponse, mockPricesResponse, type MockScenario } from "./mock/api";
+import { clientIp, RateLimiter } from "./rateLimit";
 import { liveTransport, UpstreamError, type Transport } from "./tankerkoenig";
 import type { ApiError, DataSource } from "./types";
 
@@ -41,7 +42,7 @@ export function backend(req: NextRequest): Backend | null {
   const m = mode();
   if (m === "none") return null;
   if (m === "live") {
-    return { mode: "live", transport: liveTransport(process.env.TANKERKOENIG_API_KEY!.trim()), variant: "", delayMs: 0 };
+    return { mode: "live", transport: budgeted(liveTransport(process.env.TANKERKOENIG_API_KEY!.trim())), variant: "", delayMs: 0 };
   }
   const q = req.nextUrl.searchParams;
   const scenarioParam = q.get("scenario") as MockScenario | null;
@@ -63,6 +64,32 @@ export function backend(req: NextRequest): Backend | null {
     variant: `${scenario ?? ""}|${at ?? ""}`,
     delayMs: scenario === "loading" ? 3000 : 0,
   };
+}
+
+/**
+ * Abuse guards for the public API routes (live data only; mock previews are free).
+ * Per IP: 60 requests a minute — a normal session needs a handful. Per instance:
+ * 120 upstream Tankerkönig calls a minute, so uncached requests cannot burn the key.
+ */
+const perIp = new RateLimiter(60, 60_000);
+const upstream = new RateLimiter(120, 60_000);
+
+export function rateLimited(req: NextRequest): NextResponse | null {
+  if (mode() === "mock") return null;
+  return perIp.hit(clientIp(req.headers)) ? null : tooManyRequests();
+}
+
+function budgeted(transport: Transport): Transport {
+  return (path, params) => {
+    if (!upstream.hit("all")) return Promise.reject(new UpstreamError("Upstream budget exceeded", 429));
+    return transport(path, params);
+  };
+}
+
+function tooManyRequests() {
+  const res = jsonError("rate_limited", "요청이 많아 잠시 후 다시 시도해 주세요.", 429);
+  res.headers.set("Retry-After", "60");
+  return res;
 }
 
 /** Today at HH:MM in Berlin, as a Date. */
@@ -95,7 +122,7 @@ export function noKeyError() {
 
 export function upstreamError(e: unknown) {
   if (e instanceof UpstreamError) {
-    if (e.status === 429) return jsonError("rate_limited", "요청이 많아 잠시 후 다시 시도해 주세요.", 429);
+    if (e.status === 429) return tooManyRequests();
     if (e.status === 404) return jsonError("not_found", "주유소 정보를 찾을 수 없어요.", 404);
   }
   console.error("[tankerkoenig]", e instanceof Error ? e.message : e);

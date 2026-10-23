@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { TtlCache } from "@/lib/cache";
 import { isInGermanyArea, isValidLatLng, snapToGrid } from "@/lib/geo";
-import { backend, cacheHeaders, jsonError, noKeyError, parseNumber, sleep, sourceOf, upstreamError } from "@/lib/server";
+import { backend, cacheHeaders, jsonError, noKeyError, parseNumber, rateLimited, sleep, sourceOf, upstreamError } from "@/lib/server";
 import { fetchList } from "@/lib/tankerkoenig";
 import type { StationsResponse } from "@/lib/types";
 
@@ -15,6 +15,8 @@ const cache = new TtlCache<StationsResponse>(TTL_SECONDS * 1000);
  * grid cell + radius (Tankerkönig fair use). Distances are recomputed on the client.
  */
 export async function GET(req: NextRequest) {
+  const limited = rateLimited(req);
+  if (limited) return limited;
   const q = req.nextUrl.searchParams;
   const point = { lat: parseNumber(q.get("lat")), lng: parseNumber(q.get("lng")) };
   const rad = q.has("rad") ? parseNumber(q.get("rad")) : MAX_RADIUS;

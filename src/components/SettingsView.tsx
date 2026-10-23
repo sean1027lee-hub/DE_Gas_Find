@@ -11,6 +11,9 @@ import { PlaceSearch } from "./PlaceSearch";
 import { Segmented } from "./Segmented";
 import { Stepper } from "./Stepper";
 
+/** Optional contact line for the privacy notice (Vercel env NEXT_PUBLIC_CONTACT). */
+const CONTACT = process.env.NEXT_PUBLIC_CONTACT?.trim() ?? "";
+
 interface SettingsViewProps {
   settings: Settings;
   currentPosition: Place | null;
@@ -123,6 +126,16 @@ export function SettingsView({ settings, currentPosition }: SettingsViewProps) {
 
       <Section title={t("set.a2hs")}>
         <p className="px-4 py-3.5 text-ui leading-relaxed text-ink-2">{t("set.a2hsText")}</p>
+      </Section>
+
+      <Section title={t("set.privacy")}>
+        <div className="space-y-2 px-4 py-3.5 text-sm leading-relaxed text-ink-2">
+          <p>{t("set.privacyStorage")}</p>
+          <p>{t("set.privacyLocation")}</p>
+          <p>{t("set.privacyServices")}</p>
+          <p>{t("set.privacyCookies")}</p>
+          {CONTACT && <p>{t("set.privacyContact", { contact: CONTACT })}</p>}
+        </div>
       </Section>
 
       <Section title={t("set.about")}>
