@@ -4,7 +4,7 @@ import type { LocError } from "@/hooks/useNearby";
 import type { Place } from "@/lib/store";
 import { BottomSheet } from "./BottomSheet";
 import { HomeIcon, LocateIcon } from "./icons";
-import { DeniedHelp, LOC_ERROR_KEY } from "./LocationHelp";
+import { DeniedHelp, InAppHelp, LOC_ERROR_KEY, useInAppBrowser } from "./LocationHelp";
 import { PlaceSearch } from "./PlaceSearch";
 
 interface LocationSheetProps {
@@ -51,6 +51,7 @@ function OptionButton({
 
 export function LocationSheet({ open, onClose, home, locating, locError, onLocate, onHome, onPlace }: LocationSheetProps) {
   const { t } = useT();
+  const inApp = useInAppBrowser();
   return (
     <BottomSheet open={open} onClose={onClose} title={t("locsheet.title")}>
       <div className="space-y-2">
@@ -66,7 +67,13 @@ export function LocationSheet({ open, onClose, home, locating, locError, onLocat
         {locError && (
           <div className="rounded-[12px] bg-warn-soft px-4 py-3 text-warn-ink" role="alert">
             <p className="text-sm font-semibold">{t(LOC_ERROR_KEY[locError])}</p>
-            {locError === "denied" ? <DeniedHelp /> : <p className="mt-1 text-meta">{t("locsheet.fallbackHint")}</p>}
+            {inApp !== null ? (
+              <InAppHelp app={inApp} />
+            ) : locError === "denied" ? (
+              <DeniedHelp />
+            ) : (
+              <p className="mt-1 text-meta">{t("locsheet.fallbackHint")}</p>
+            )}
           </div>
         )}
         <OptionButton

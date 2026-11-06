@@ -239,6 +239,11 @@ export const en: Messages = {
   "locerr.unsupported": "This browser doesn't support location.",
   "help.denied.safari": "Safari: tap “AA” in the address bar → Website Settings → Location: Allow, then reload.",
   "help.denied.app": "Home-screen app: Settings → Privacy & Security → turn on Location Services → Safari Websites: “While Using the App”.",
+  "inapp.title": "Opened inside {app}",
+  "inapp.titleGeneric": "Opened inside an app's browser",
+  "inapp.body": "Location often doesn't work here. Tap ⋯ at the top right → “Open in browser”, or copy the link and paste it into Safari or Chrome. Searching by city or postcode works here too.",
+  "inapp.copy": "Copy link",
+  "inapp.copied": "Copied",
 
   "search.label": "Postcode or city",
   "search.placeholder": "Postcode or city (e.g. 64283)",

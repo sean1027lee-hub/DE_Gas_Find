@@ -163,3 +163,16 @@ test.describe("German device", () => {
     await expect(page.getByRole("heading", { name: "설정" })).toBeVisible();
   });
 });
+
+test.describe("Threads in-app browser", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Barcelona 389.0.0.0",
+    permissions: [],
+  });
+  test("explains how to open in a real browser", async ({ page }) => {
+    await page.goto("/?at=10:30");
+    await expect(page.getByText("Threads 앱 안에서 열려 있어요")).toBeVisible();
+    await expect(page.getByRole("button", { name: "주소 복사" })).toBeVisible();
+  });
+});

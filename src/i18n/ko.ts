@@ -241,6 +241,11 @@ export const ko = {
   "locerr.unsupported": "이 브라우저는 위치 기능을 지원하지 않아요.",
   "help.denied.safari": "Safari: 주소창의 ‘가가’ → 웹 사이트 설정 → 위치를 ‘허용’으로 바꾸고 새로고침하세요.",
   "help.denied.app": "홈 화면 앱: 설정 → 개인정보 보호 및 보안 → 위치 서비스를 켜고, Safari 웹 사이트를 ‘앱을 사용하는 동안’으로 바꾸세요.",
+  "inapp.title": "{app} 앱 안에서 열려 있어요",
+  "inapp.titleGeneric": "앱 안의 브라우저에서 열려 있어요",
+  "inapp.body": "여기서는 위치를 받을 수 없을 때가 많아요. 오른쪽 위 ⋯ 메뉴에서 ‘브라우저에서 열기’를 누르거나, 주소를 복사해 Safari·Chrome에 붙여넣어 주세요. 도시·우편번호 검색은 여기서도 돼요.",
+  "inapp.copy": "주소 복사",
+  "inapp.copied": "복사했어요",
 
   "search.label": "우편번호 또는 도시",
   "search.placeholder": "우편번호 또는 도시 (예: 64283)",

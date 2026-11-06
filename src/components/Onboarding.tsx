@@ -6,7 +6,7 @@ import { updateSettings, type Place, type Settings } from "@/lib/store";
 import { FUEL_LABELS, FUELS, type Fuel } from "@/lib/types";
 import { Button } from "./Button";
 import { HomeIcon, LocateIcon, SearchIcon } from "./icons";
-import { DeniedHelp, LOC_ERROR_KEY } from "./LocationHelp";
+import { DeniedHelp, InAppHelp, LOC_ERROR_KEY, useInAppBrowser } from "./LocationHelp";
 import { LogoMark } from "./Logo";
 import { PlaceSearch } from "./PlaceSearch";
 import { Price } from "./Price";
@@ -28,6 +28,7 @@ const SAMPLE: [Fuel, number][] = [
 
 export function Onboarding({ settings, locating, locError, onLocate, onHome, onPlace }: OnboardingProps) {
   const { t } = useT();
+  const inApp = useInAppBrowser();
   const [searching, setSearching] = useState(false);
   const finish = () => updateSettings({ onboarded: true });
 
@@ -91,7 +92,12 @@ export function Onboarding({ settings, locating, locError, onLocate, onHome, onP
             <p className="text-sm font-semibold">
               {t(LOC_ERROR_KEY[locError])} {t("onb.locErrorSuffix")}
             </p>
-            {locError === "denied" && <DeniedHelp />}
+            {inApp !== null ? <InAppHelp app={inApp} /> : locError === "denied" && <DeniedHelp />}
+          </div>
+        )}
+        {!locError && inApp !== null && (
+          <div className="mb-3 rounded-[12px] bg-warn-soft px-4 py-3 text-warn-ink">
+            <InAppHelp app={inApp} />
           </div>
         )}
 

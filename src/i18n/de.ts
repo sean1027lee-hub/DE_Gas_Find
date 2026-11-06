@@ -239,6 +239,11 @@ export const de: Messages = {
   "locerr.unsupported": "Dieser Browser unterstützt keine Standortabfrage.",
   "help.denied.safari": "Safari: „AA“ in der Adressleiste → Website-Einstellungen → Standort: Erlauben, dann neu laden.",
   "help.denied.app": "Home-Bildschirm-App: Einstellungen → Datenschutz & Sicherheit → Ortungsdienste einschalten → Safari-Websites: „Beim Verwenden der App“.",
+  "inapp.title": "In {app} geöffnet",
+  "inapp.titleGeneric": "Im Browser einer App geöffnet",
+  "inapp.body": "Hier funktioniert der Standort oft nicht. Tippe oben rechts auf ⋯ → „Im Browser öffnen“ oder kopiere den Link und füge ihn in Safari oder Chrome ein. Die Suche nach Ort oder PLZ klappt auch hier.",
+  "inapp.copy": "Link kopieren",
+  "inapp.copied": "Kopiert",
 
   "search.label": "PLZ oder Ort",
   "search.placeholder": "PLZ oder Ort (z. B. 64283)",
